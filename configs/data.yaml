@@ -1,0 +1,303 @@
+# NAXS数据层配置文件
+
+# 数据源配置
+data_sources:
+  akshare:
+    enabled: true
+    name: "AkShare"
+    description: "AkShare开源金融数据接口"
+    base_url: "https://akshare.akfamily.xyz"
+    rate_limit:
+      requests_per_second: 2
+      requests_per_minute: 100
+      retry_count: 3
+      retry_delay: 1.0
+    timeout: 30
+    
+  tushare:
+    enabled: false
+    name: "Tushare Pro"
+    description: "Tushare专业版数据接口"
+    api_key: "${TUSHARE_API_KEY}"
+    base_url: "http://api.tushare.pro"
+    rate_limit:
+      requests_per_second: 1
+      requests_per_minute: 60
+      retry_count: 3
+      retry_delay: 2.0
+    timeout: 60
+
+# 数据存储配置
+storage:
+  parquet:
+    root_path: "data/parquet"
+    compression: "snappy"
+    partition_cols: ["exchange", "date"]
+    file_format: "{exchange}/{symbol}.parquet"
+    max_file_size_mb: 100
+    enable_incremental: true
+    
+  cache:
+    enabled: true
+    backend: "redis"
+    redis:
+      host: "localhost"
+      port: 6379
+      db: 0
+      password: null
+      ttl_seconds: 3600
+    memory:
+      max_size_mb: 512
+      ttl_seconds: 1800
+
+# 数据质量配置
+data_quality:
+  enabled: true
+  rules:
+    missing_data:
+      enabled: true
+      threshold: 0.05  # 5%缺失率阈值
+      severity: "warning"
+      
+    duplicate_dates:
+      enabled: true
+      severity: "error"
+      
+    future_dates:
+      enabled: true
+      severity: "error"
+      
+    negative_prices:
+      enabled: true
+      severity: "error"
+      
+    zero_prices:
+      enabled: true
+      severity: "warning"
+      
+    price_outliers:
+      enabled: true
+      threshold: 3.0  # 3σ规则
+      severity: "warning"
+      
+    ohlc_consistency:
+      enabled: true
+      severity: "error"
+      
+    extreme_returns:
+      enabled: true
+      threshold: 0.20  # 20%极端收益率
+      severity: "warning"
+      
+    negative_volume:
+      enabled: true
+      severity: "error"
+      
+    zero_volume_days:
+      enabled: true
+      threshold: 0.10  # 10%零成交量天数
+      severity: "warning"
+      
+    volume_outliers:
+      enabled: true
+      threshold: 5.0  # 5σ规则
+      severity: "warning"
+      
+    data_gaps:
+      enabled: true
+      threshold: 5  # 连续5个交易日缺失
+      severity: "warning"
+      
+    price_jumps:
+      enabled: true
+      threshold: 0.15  # 15%价格跳跃
+      severity: "warning"
+  
+  reports:
+    output_dir: "reports/dq"
+    formats: ["json", "html", "markdown"]
+    retention_days: 30
+    auto_cleanup: true
+
+# 交易日历配置
+calendar:
+  source: "akshare"  # akshare, tushare, manual
+  cache_dir: "data/cache"
+  start_year: 2018
+  end_year: 2030
+  timezone: "Asia/Shanghai"
+  output_timezone: "UTC"
+  
+  # 手动配置的节假日（如果source为manual）
+  holidays:
+    - "2024-01-01"  # 元旦
+    - "2024-02-10"  # 春节
+    - "2024-02-11"
+    - "2024-02-12"
+    - "2024-02-13"
+    - "2024-02-14"
+    - "2024-02-15"
+    - "2024-02-16"
+    - "2024-02-17"
+
+# Qlib集成配置
+qlib:
+  output_dir: "data/qlib_cn_daily"
+  frequency: "daily"
+  features:
+    - "open"
+    - "high"
+    - "low"
+    - "close"
+    - "volume"
+    - "amount"
+    - "factor"  # 复权因子
+  
+  instruments:
+    universe: "all"  # all, sh, sz, custom
+    custom_list: []  # 自定义股票列表
+    min_trading_days: 100
+    exclude_st: true
+    exclude_delisted: false
+  
+  validation:
+    enabled: true
+    check_completeness: true
+    check_consistency: true
+    sample_symbols: 10
+
+# 数据处理配置
+processing:
+  batch_size: 100
+  parallel_workers: 4
+  memory_limit_mb: 2048
+  
+  # 数据清洗配置
+  cleaning:
+    remove_duplicates: true
+    fill_missing: "forward"  # forward, backward, interpolate, drop
+    outlier_method: "iqr"  # iqr, zscore, isolation_forest
+    outlier_threshold: 3.0
+    
+  # 复权配置
+  adjustment:
+    default_type: "qfq"  # qfq, hfq, none
+    preserve_original: true
+    
+  # 时区处理
+  timezone:
+    input: "Asia/Shanghai"
+    output: "UTC"
+    localize_naive: true
+
+# 监控配置
+monitoring:
+  enabled: true
+  metrics:
+    - "data_freshness"
+    - "data_completeness"
+    - "processing_time"
+    - "error_rate"
+    - "storage_usage"
+  
+  alerts:
+    email:
+      enabled: false
+      smtp_host: "smtp.gmail.com"
+      smtp_port: 587
+      username: "${EMAIL_USERNAME}"
+      password: "${EMAIL_PASSWORD}"
+      recipients: ["admin@example.com"]
+    
+    webhook:
+      enabled: false
+      url: "${WEBHOOK_URL}"
+      timeout: 10
+
+# 日志配置
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  handlers:
+    console:
+      enabled: true
+      level: "INFO"
+      
+    file:
+      enabled: true
+      level: "DEBUG"
+      filename: "logs/data.log"
+      max_bytes: 10485760  # 10MB
+      backup_count: 5
+      
+    rotating:
+      enabled: true
+      level: "INFO"
+      filename: "logs/data_rotating.log"
+      when: "midnight"
+      interval: 1
+      backup_count: 30
+
+# 环境变量配置
+environment:
+  development:
+    debug: true
+    log_level: "DEBUG"
+    cache_ttl: 300
+    
+  production:
+    debug: false
+    log_level: "INFO"
+    cache_ttl: 3600
+    
+  testing:
+    debug: true
+    log_level: "DEBUG"
+    use_mock_data: true
+    cache_ttl: 60
+
+# 性能优化配置
+performance:
+  # 内存优化
+  memory:
+    chunk_size: 10000
+    use_categorical: true
+    optimize_dtypes: true
+    
+  # 并行处理
+  parallel:
+    max_workers: 4
+    use_multiprocessing: false
+    chunk_size: 1000
+    
+  # 缓存优化
+  cache:
+    enable_query_cache: true
+    cache_size_mb: 256
+    cache_ttl_seconds: 1800
+
+# 安全配置
+security:
+  # API访问控制
+  api:
+    rate_limit:
+      enabled: true
+      requests_per_minute: 1000
+      burst_size: 100
+    
+    authentication:
+      enabled: false
+      method: "token"  # token, oauth, basic
+      
+  # 数据访问控制
+  data:
+    encryption:
+      enabled: false
+      algorithm: "AES-256"
+      key: "${ENCRYPTION_KEY}"
+    
+    audit:
+      enabled: true
+      log_access: true
+      log_modifications: true

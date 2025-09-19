@@ -1,0 +1,54 @@
+[
+  {
+    "endpoint": "/health",
+    "total_requests": 50,
+    "successful_requests": 0,
+    "success_rate": 0.0,
+    "total_time": 23.090873956680298,
+    "requests_per_second": 2.165357625432569,
+    "avg_response_time": 12692.359890937805,
+    "min_response_time": 2301.4259338378906,
+    "max_response_time": 23088.8671875,
+    "p95_response_time": 23087.841987609863,
+    "p99_response_time": 23088.8671875
+  },
+  {
+    "endpoint": "/system/stats",
+    "total_requests": 50,
+    "successful_requests": 0,
+    "success_rate": 0.0,
+    "total_time": 23.120791912078857,
+    "requests_per_second": 2.1625556853819874,
+    "avg_response_time": 12692.420387268066,
+    "min_response_time": 2313.984155654907,
+    "max_response_time": 23118.802785873413,
+    "p95_response_time": 23061.924695968628,
+    "p99_response_time": 23118.802785873413
+  },
+  {
+    "endpoint": "/performance/test",
+    "total_requests": 50,
+    "successful_requests": 0,
+    "success_rate": 0.0,
+    "total_time": 23.124049186706543,
+    "requests_per_second": 2.1622510658186886,
+    "avg_response_time": 12706.83645248413,
+    "min_response_time": 2294.5733070373535,
+    "max_response_time": 23121.232509613037,
+    "p95_response_time": 23120.232582092285,
+    "p99_response_time": 23121.232509613037
+  },
+  {
+    "endpoint": "/health",
+    "total_requests": 200,
+    "successful_requests": 0,
+    "success_rate": 0.0,
+    "total_time": 23.028656721115112,
+    "requests_per_second": 8.68483135695096,
+    "avg_response_time": 12631.199643611908,
+    "min_response_time": 2280.5769443511963,
+    "max_response_time": 23020.660638809204,
+    "p95_response_time": 22958.445072174072,
+    "p99_response_time": 23020.660638809204
+  }
+]

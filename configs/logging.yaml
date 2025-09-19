@@ -1,0 +1,340 @@
+# NAXS日志配置文件
+
+version: 1
+disable_existing_loggers: false
+
+# 格式化器配置
+formatters:
+  standard:
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S"
+    
+  detailed:
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(funcName)s() - %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S"
+    
+  simple:
+    format: "%(levelname)s - %(message)s"
+    
+  json:
+    format: '{"timestamp": "%(asctime)s", "logger": "%(name)s", "level": "%(levelname)s", "module": "%(module)s", "function": "%(funcName)s", "line": %(lineno)d, "message": "%(message)s"}'
+    datefmt: "%Y-%m-%dT%H:%M:%S"
+
+# 处理器配置
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: standard
+    stream: ext://sys.stdout
+    
+  file_info:
+    class: logging.FileHandler
+    level: INFO
+    formatter: detailed
+    filename: logs/naxs.log
+    mode: a
+    encoding: utf-8
+    
+  file_error:
+    class: logging.FileHandler
+    level: ERROR
+    formatter: detailed
+    filename: logs/error.log
+    mode: a
+    encoding: utf-8
+    
+  rotating_file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: detailed
+    filename: logs/naxs_rotating.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+    encoding: utf-8
+    
+  timed_rotating_file:
+    class: logging.handlers.TimedRotatingFileHandler
+    level: INFO
+    formatter: standard
+    filename: logs/naxs_daily.log
+    when: midnight
+    interval: 1
+    backupCount: 30
+    encoding: utf-8
+    
+  data_file:
+    class: logging.FileHandler
+    level: DEBUG
+    formatter: detailed
+    filename: logs/data.log
+    mode: a
+    encoding: utf-8
+    
+  api_file:
+    class: logging.FileHandler
+    level: INFO
+    formatter: json
+    filename: logs/api.log
+    mode: a
+    encoding: utf-8
+    
+  performance_file:
+    class: logging.FileHandler
+    level: INFO
+    formatter: json
+    filename: logs/performance.log
+    mode: a
+    encoding: utf-8
+    
+  audit_file:
+    class: logging.FileHandler
+    level: INFO
+    formatter: json
+    filename: logs/audit.log
+    mode: a
+    encoding: utf-8
+
+# 日志记录器配置
+loggers:
+  # 根日志记录器
+  "":
+    level: INFO
+    handlers: [console, file_info, file_error, rotating_file]
+    propagate: false
+    
+  # 数据层日志
+  modules.data:
+    level: DEBUG
+    handlers: [console, data_file, file_error]
+    propagate: false
+    
+  modules.data.akshare_source:
+    level: INFO
+    handlers: [console, data_file]
+    propagate: false
+    
+  modules.data.parquet_store:
+    level: INFO
+    handlers: [console, data_file]
+    propagate: false
+    
+  modules.data.calendar:
+    level: INFO
+    handlers: [console, data_file]
+    propagate: false
+    
+  modules.data.dq:
+    level: INFO
+    handlers: [console, data_file]
+    propagate: false
+    
+  modules.data.qlib_writer:
+    level: INFO
+    handlers: [console, data_file]
+    propagate: false
+    
+  # API日志
+  market-api:
+    level: INFO
+    handlers: [console, api_file, file_error]
+    propagate: false
+    
+  fastapi:
+    level: INFO
+    handlers: [console, api_file]
+    propagate: false
+    
+  uvicorn:
+    level: INFO
+    handlers: [console, api_file]
+    propagate: false
+    
+  uvicorn.access:
+    level: INFO
+    handlers: [api_file]
+    propagate: false
+    
+  # 操作脚本日志
+  ops:
+    level: INFO
+    handlers: [console, file_info, file_error]
+    propagate: false
+    
+  ops.pull_prices:
+    level: INFO
+    handlers: [console, data_file]
+    propagate: false
+    
+  ops.build_qlib_bundle:
+    level: INFO
+    handlers: [console, data_file]
+    propagate: false
+    
+  ops.dq_report:
+    level: INFO
+    handlers: [console, data_file]
+    propagate: false
+    
+  # 性能监控日志
+  performance:
+    level: INFO
+    handlers: [performance_file]
+    propagate: false
+    
+  # 审计日志
+  audit:
+    level: INFO
+    handlers: [audit_file]
+    propagate: false
+    
+  # 第三方库日志
+  akshare:
+    level: WARNING
+    handlers: [console, data_file]
+    propagate: false
+    
+  pandas:
+    level: WARNING
+    handlers: [console]
+    propagate: false
+    
+  pyarrow:
+    level: WARNING
+    handlers: [console]
+    propagate: false
+    
+  requests:
+    level: WARNING
+    handlers: [console]
+    propagate: false
+    
+  urllib3:
+    level: WARNING
+    handlers: [console]
+    propagate: false
+    
+  # 开发调试日志
+  debug:
+    level: DEBUG
+    handlers: [console, rotating_file]
+    propagate: false
+
+# 根配置
+root:
+  level: INFO
+  handlers: [console, timed_rotating_file, file_error]
+
+# 环境特定配置
+environments:
+  development:
+    level: DEBUG
+    console_level: DEBUG
+    file_level: DEBUG
+    
+  production:
+    level: INFO
+    console_level: WARNING
+    file_level: INFO
+    
+  testing:
+    level: DEBUG
+    console_level: INFO
+    file_level: DEBUG
+
+# 日志轮转配置
+rotation:
+  max_file_size: "10MB"
+  backup_count: 5
+  rotation_time: "midnight"
+  retention_days: 30
+  
+# 日志过滤配置
+filters:
+  # 敏感信息过滤
+  sensitive_filter:
+    class: logging.Filter
+    # 过滤包含敏感信息的日志
+    
+  # 频率限制过滤
+  rate_limit_filter:
+    class: logging.Filter
+    # 限制高频日志的输出频率
+    
+# 监控配置
+monitoring:
+  # 日志监控
+  log_monitoring:
+    enabled: true
+    error_threshold: 10  # 每分钟错误日志数量阈值
+    warning_threshold: 50  # 每分钟警告日志数量阈值
+    
+  # 日志统计
+  statistics:
+    enabled: true
+    interval_seconds: 300  # 5分钟统计间隔
+    metrics:
+      - "log_count_by_level"
+      - "log_count_by_logger"
+      - "error_rate"
+      - "response_time"
+      
+# 告警配置
+alerting:
+  # 错误日志告警
+  error_alerts:
+    enabled: true
+    threshold: 5  # 5分钟内错误数量阈值
+    cooldown_minutes: 15  # 告警冷却时间
+    
+  # 磁盘空间告警
+  disk_space_alerts:
+    enabled: true
+    threshold_percent: 85  # 磁盘使用率阈值
+    check_interval_minutes: 30
+    
+# 日志清理配置
+cleanup:
+  enabled: true
+  retention_days: 30
+  cleanup_schedule: "0 2 * * *"  # 每天凌晨2点清理
+  compress_old_logs: true
+  
+# 性能配置
+performance:
+  # 异步日志
+  async_logging:
+    enabled: false
+    queue_size: 1000
+    
+  # 缓冲配置
+  buffering:
+    enabled: true
+    buffer_size: 8192
+    flush_interval: 1.0
+    
+  # 批量写入
+  batch_writing:
+    enabled: false
+    batch_size: 100
+    flush_interval: 5.0
+
+# 安全配置
+security:
+  # 日志加密
+  encryption:
+    enabled: false
+    algorithm: "AES-256"
+    key_file: "configs/log_encryption.key"
+    
+  # 访问控制
+  access_control:
+    enabled: false
+    allowed_users: ["admin", "operator"]
+    log_access_attempts: true
+    
+  # 日志完整性
+  integrity:
+    enabled: false
+    hash_algorithm: "SHA-256"
+    verify_on_read: false

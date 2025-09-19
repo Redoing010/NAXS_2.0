@@ -1,0 +1,20 @@
+{
+  "symbol": "600519.SH",
+  "date_range": "2024-01-01 - 2024-06-30",
+  "total_records": 117,
+  "issues": [],
+  "metrics": {
+    "missing_data_ratio": 0.0,
+    "duplicate_dates_count": "0",
+    "future_dates_count": 0,
+    "negative_prices_count": "0",
+    "zero_prices_count": "0",
+    "ohlc_inconsistent_count": "0",
+    "extreme_returns_count": "0",
+    "max_return": 0.03401863629640567,
+    "min_return": -0.04009453653336059,
+    "negative_volume_count": "0",
+    "zero_volume_ratio": 0.0
+  },
+  "generated_at": "2025-09-19T19:55:43.404024"
+}
