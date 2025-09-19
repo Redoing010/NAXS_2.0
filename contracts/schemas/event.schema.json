@@ -1,0 +1,21 @@
+{
+  "$id": "https://naxs.io/schemas/event.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CorporateEvent",
+  "type": "object",
+  "properties": {
+    "event_id": {"type": "string"},
+    "symbol": {"type": "string"},
+    "event_type": {
+      "type": "string",
+      "enum": ["announcement", "earnings", "mna", "buyback", "dividend", "management_change", "supply_chain"]
+    },
+    "event_time": {"type": "string", "format": "date-time"},
+    "trading_day": {"type": "string", "format": "date"},
+    "payload": {"type": "object"},
+    "source": {"type": "string"},
+    "delay": {"type": "integer", "minimum": 0}
+  },
+  "required": ["event_id", "symbol", "event_type", "event_time"],
+  "additionalProperties": false
+}

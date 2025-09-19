@@ -1,0 +1,23 @@
+{
+  "$id": "https://naxs.io/schemas/kg-entity.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KnowledgeGraphEntity",
+  "type": "object",
+  "properties": {
+    "entity_id": {"type": "string"},
+    "entity_type": {
+      "type": "string",
+      "enum": ["Company", "Person", "Product", "Event", "Indicator"]
+    },
+    "attributes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null"]
+      }
+    },
+    "observed_at": {"type": "string", "format": "date-time"},
+    "source": {"type": "string"}
+  },
+  "required": ["entity_id", "entity_type"],
+  "additionalProperties": false
+}

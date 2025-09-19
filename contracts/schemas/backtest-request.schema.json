@@ -1,0 +1,24 @@
+{
+  "$id": "https://naxs.io/schemas/backtest-request.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BacktestInput",
+  "type": "object",
+  "properties": {
+    "universe": {"type": "string"},
+    "features": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1
+    },
+    "label": {"type": "string"},
+    "start": {"type": "string", "format": "date"},
+    "end": {"type": "string", "format": "date"},
+    "rebalance": {"type": "string", "enum": ["daily", "weekly", "monthly"]},
+    "benchmark": {"type": "string"},
+    "cost": {"type": "number", "minimum": 0},
+    "topk": {"type": "integer", "minimum": 1},
+    "drop_n": {"type": "integer", "minimum": 0}
+  },
+  "required": ["universe", "features", "start", "end"],
+  "additionalProperties": false
+}

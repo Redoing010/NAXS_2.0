@@ -1,0 +1,27 @@
+{
+  "$id": "https://naxs.io/schemas/kg-edge.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KnowledgeGraphEdge",
+  "type": "object",
+  "properties": {
+    "edge_id": {"type": "string"},
+    "from": {"type": "string"},
+    "to": {"type": "string"},
+    "relation": {
+      "type": "string",
+      "enum": ["HOLDING", "SUPPLY", "COMPETE", "ANNOUNCE", "LEADS", "MENTIONS"]
+    },
+    "weight": {"type": "number"},
+    "effective_from": {"type": "string", "format": "date-time"},
+    "effective_to": {"type": ["string", "null"], "format": "date-time"},
+    "attributes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null"]
+      }
+    },
+    "source": {"type": "string"}
+  },
+  "required": ["edge_id", "from", "to", "relation"],
+  "additionalProperties": false
+}

@@ -1,0 +1,14 @@
+{
+  "$id": "https://naxs.io/schemas/command.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CommandEnvelope",
+  "type": "object",
+  "properties": {
+    "cmd": {"type": "string"},
+    "args": {"type": "object"},
+    "trace_id": {"type": "string"},
+    "session_id": {"type": "string"}
+  },
+  "required": ["cmd", "args"],
+  "additionalProperties": false
+}

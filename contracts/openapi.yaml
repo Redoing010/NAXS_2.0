@@ -1,0 +1,357 @@
+openapi: 3.1.0
+info:
+  title: NAXS Unified API
+  version: 0.1.0
+  description: |
+    Consolidated REST contract for the NAXS 3.0 research workflow. All
+    endpoints follow the `/api` prefix when deployed behind the API
+    gateway and are protected by RBAC policies. Trace identifiers are
+    required for observability and idempotency is enforced on mutating
+    commands.
+servers:
+  - url: /api
+    description: Primary gateway ingress
+  - url: https://api.naxs.local/api
+    description: External ingress (behind WAF)
+security:
+  - ApiKeyAuth: []
+  - OAuth2Client: [user]
+tags:
+  - name: intents
+    description: Natural language intent parsing and confirmation
+  - name: commands
+    description: Codex command execution entry points
+  - name: analytics
+    description: Feature retrieval, backtests, attribution and regime endpoints
+  - name: reports
+    description: Downloadable reports and async generation status
+paths:
+  /intents:
+    post:
+      tags: [intents]
+      summary: Parse a free form instruction into a typed intent contract
+      operationId: parseIntent
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntentInput'
+      responses:
+        '200':
+          description: Classified intent and extracted parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntentOutput'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /commands/execute:
+    post:
+      tags: [commands]
+      summary: Execute a typed Codex command after intent confirmation
+      operationId: executeCommand
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandEnvelope'
+      responses:
+        '200':
+          description: Execution accepted, response mirrors downstream payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResult'
+        '202':
+          description: Accepted for async processing; poll using task id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandAccepted'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409':
+          description: Duplicate command (idempotency key already used)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /backtests:
+    post:
+      tags: [analytics]
+      summary: Trigger a Qlib backtest run and return the consolidated metrics
+      operationId: runBacktest
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BacktestInput'
+      responses:
+        '200':
+          description: Backtest completed synchronously
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BacktestResult'
+        '202':
+          description: Backtest scheduled for asynchronous completion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandAccepted'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /features:
+    get:
+      tags: [analytics]
+      summary: Retrieve factor features from the feature store
+      operationId: listFeatures
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+        - name: symbols
+          in: query
+          description: Comma separated list of instrument identifiers
+          schema:
+            type: string
+        - name: start
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: factors
+          in: query
+          schema:
+            type: string
+            description: Optional comma separated factor ids
+      responses:
+        '200':
+          description: Feature values materialised as JSON rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FeatureRow'
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /reports/{reportId}:
+    get:
+      tags: [reports]
+      summary: Download a generated research report artifact
+      operationId: getReport
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Report payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportPayload'
+        '404':
+          description: Report not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    OAuth2Client:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://idp.naxs.local/oauth/token
+          scopes:
+            user: Basic research access
+            pro: Professional feature set
+            admin: Administrative operations
+  parameters:
+    TraceId:
+      name: X-Trace-Id
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Correlates downstream traces and logs
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Reuse the same key to guarantee at most once execution
+  responses:
+    BadRequest:
+      description: Invalid payload or missing parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimited:
+      description: Request rejected due to rate limiting
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: Unexpected downstream failure
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    IntentInput:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          description: Original natural language instruction
+        session_id:
+          type: string
+        context:
+          type: object
+          description: Optional hints from the UI channel
+    IntentOutput:
+      type: object
+      required: [intent, confidence]
+      properties:
+        intent:
+          type: string
+          description: Canonical intent key
+        confidence:
+          type: number
+          format: float
+        missing_params:
+          type: array
+          items:
+            type: string
+        slots:
+          type: object
+          additionalProperties: true
+    CommandEnvelope:
+      type: object
+      required: [cmd, args]
+      properties:
+        cmd:
+          type: string
+          description: Canonical command identifier
+        args:
+          type: object
+        trace_id:
+          type: string
+        session_id:
+          type: string
+    CommandResult:
+      type: object
+      required: [cmd, payload]
+      properties:
+        cmd:
+          type: string
+        payload:
+          type: object
+          description: Command specific return payload
+        trace_id:
+          type: string
+        cached:
+          type: boolean
+          description: Indicates the response came from degraded cache
+    CommandAccepted:
+      type: object
+      required: [task_id, status]
+      properties:
+        task_id:
+          type: string
+        status:
+          type: string
+          enum: [accepted, queued]
+        eta_seconds:
+          type: integer
+    BacktestInput:
+      $ref: 'schemas/backtest-request.schema.json'
+    BacktestResult:
+      type: object
+      required: [metrics]
+      properties:
+        task_id:
+          type: string
+        metrics:
+          type: object
+        slices:
+          type: object
+        charts:
+          type: object
+        explain:
+          type: object
+    FeatureRow:
+      type: object
+      required: [symbol, dt, values]
+      properties:
+        symbol:
+          type: string
+        dt:
+          type: string
+          format: date
+        values:
+          type: object
+          additionalProperties:
+            type: number
+    ReportPayload:
+      type: object
+      required: [report_id, format]
+      properties:
+        report_id:
+          type: string
+        format:
+          type: string
+          enum: [markdown, html, pdf]
+        url:
+          type: string
+          format: uri
+        inline:
+          type: string
+          description: Optional inline body (base64 encoded for pdf)
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
