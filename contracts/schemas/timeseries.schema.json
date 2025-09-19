@@ -1,0 +1,22 @@
+{
+  "$id": "https://naxs.io/schemas/timeseries.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TimeSeriesRow",
+  "type": "object",
+  "properties": {
+    "symbol": {"type": "string"},
+    "ts": {"type": "string", "format": "date-time"},
+    "freq": {"type": "string", "enum": ["tick", "1min", "5min", "day", "week", "month"]},
+    "fields": {
+      "type": "object",
+      "description": "Dynamic container that holds OHLCV values and derived indicators.",
+      "additionalProperties": {
+        "type": ["number", "string", "null"]
+      }
+    },
+    "source": {"type": "string"},
+    "ingested_at": {"type": "string", "format": "date-time"}
+  },
+  "required": ["symbol", "ts", "freq", "fields"],
+  "additionalProperties": false
+}

@@ -1,0 +1,121 @@
+{
+  "$id": "https://naxs.io/schemas/report.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ResearchReport",
+  "type": "object",
+  "properties": {
+    "report_id": {"type": "string"},
+    "title": {"type": "string"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "author": {"type": "string"},
+    "format": {"type": "string", "enum": ["markdown", "html", "pdf"]},
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "ann_return": {"type": "number"},
+        "sharpe": {"type": "number"},
+        "max_dd": {"type": "number"}
+      },
+      "required": ["ann_return", "sharpe", "max_dd"]
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {"type": "string"},
+          "body": {"type": "string"}
+        },
+        "required": ["title", "body"]
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {"type": "string"},
+          "uri": {"type": "string", "format": "uri"}
+        },
+        "required": ["type", "uri"]
+      }
+    },
+    "regime": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "confidence": {"type": "number"}
+      }
+    },
+    "holdings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "symbol": {"type": "string"},
+          "weight": {"type": "number"}
+        },
+        "required": ["symbol", "weight"]
+      }
+    },
+    "backtest": {
+      "$ref": "#/definitions/backtest"
+    }
+  },
+  "required": ["report_id", "title", "generated_at", "format", "metrics"],
+  "additionalProperties": false,
+  "definitions": {
+    "backtest": {
+      "type": "object",
+      "properties": {
+        "task_id": {"type": "string"},
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "ann_return": {"type": "number"},
+            "sharpe": {"type": "number"},
+            "max_dd": {"type": "number"},
+            "ic": {"type": "number"},
+            "ic_ir": {"type": "number"}
+          },
+          "required": ["ann_return", "sharpe", "max_dd"]
+        },
+        "slices": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "charts": {
+          "type": "object",
+          "properties": {
+            "equity_curve": {"type": "string"},
+            "ic_series": {
+              "type": "array",
+              "items": {"type": "number"}
+            }
+          }
+        },
+        "explain": {
+          "type": "object",
+          "properties": {
+            "top_factors": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "shap": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "factor": {"type": "string"},
+                  "value": {"type": "number"}
+                },
+                "required": ["factor", "value"]
+              }
+            }
+          }
+        }
+      },
+      "required": ["task_id", "metrics"]
+    }
+  }
+}

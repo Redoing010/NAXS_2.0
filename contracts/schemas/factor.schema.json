@@ -1,0 +1,54 @@
+{
+  "$id": "https://naxs.io/schemas/factor.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FactorDefinition",
+  "type": "object",
+  "properties": {
+    "id": {"type": "string"},
+    "name": {"type": "string"},
+    "owner": {"type": "string"},
+    "category": {"type": "string"},
+    "source": {"type": "string"},
+    "expression": {"type": "string"},
+    "cleaning": {
+      "type": "object",
+      "properties": {
+        "winsorize": {
+          "type": "object",
+          "properties": {
+            "method": {"type": "string"},
+            "k": {"type": "number"}
+          },
+          "required": ["method"]
+        },
+        "normalize": {"type": "string"},
+        "neutralize": {
+          "type": "object",
+          "properties": {
+            "by": {
+              "type": "array",
+              "items": {"type": "string"}
+            }
+          },
+          "required": ["by"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "lag": {"type": "string"},
+    "window": {"type": "string"},
+    "alignment": {
+      "type": "object",
+      "properties": {
+        "by": {"type": "string"},
+        "delay": {"type": "integer", "minimum": 0}
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  },
+  "required": ["id", "name", "category", "source", "expression"],
+  "additionalProperties": false
+}

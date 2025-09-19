@@ -1,572 +1,227 @@
-# NAXS数据模式规范
+# 数据与 Schema 契约
 
-本文档定义了NAXS系统中所有数据的标准模式和字段规范，确保数据的一致性和可追溯性。
+本文件收敛 NAXS 3.0 在数据层的结构化约束，覆盖时间序列、事件、因子、知识图谱以及 ClickHouse/Parquet/Qlib 等存储映射。所有 JSON Schema 均位于 `contracts/schemas/`。
 
-## 1. 数据标准化原则
+## 1. 时间序列与事件 Schema
 
-### 1.1 命名规范
-- **字段名称**：使用小写字母和下划线，如 `open_price`、`trading_date`
-- **股票代码**：统一格式为 `XXXXXX.XX`，如 `000001.SZ`、`600519.SH`
-- **日期格式**：ISO 8601格式 `YYYY-MM-DD`
-- **时间戳**：UTC时区，ISO 8601格式 `YYYY-MM-DDTHH:MM:SS.sssZ`
-
-### 1.2 数据类型规范
-- **价格数据**：float64，精度到分（0.01）
-- **成交量**：int64，单位为股
-- **成交额**：float64，单位为元
-- **日期**：date类型或datetime64[ns]
-- **股票代码**：string类型
-
-### 1.3 时区处理
-- **存储时区**：所有时间数据以UTC时区存储
-- **输入时区**：默认为Asia/Shanghai，自动转换为UTC
-- **输出时区**：API返回UTC时间，前端根据需要转换本地时区
-
-## 2. 核心数据模式
-
-### 2.1 股票基础信息 (Security Master)
-
-```yaml
-table: security_master
-partition: exchange
-index: symbol
-
-fields:
-  symbol:           # 股票代码
-    type: string
-    format: "XXXXXX.XX"
-    example: "000001.SZ"
-    required: true
-    
-  name:             # 股票名称
-    type: string
-    max_length: 50
-    example: "平安银行"
-    required: true
-    
-  exchange:         # 交易所
-    type: string
-    enum: ["SH", "SZ"]
-    example: "SZ"
-    required: true
-    
-  list_date:        # 上市日期
-    type: date
-    format: "YYYY-MM-DD"
-    example: "1991-04-03"
-    required: true
-    
-  delist_date:      # 退市日期
-    type: date
-    format: "YYYY-MM-DD"
-    nullable: true
-    
-  industry_1:       # 一级行业
-    type: string
-    max_length: 50
-    example: "银行"
-    
-  industry_2:       # 二级行业
-    type: string
-    max_length: 50
-    example: "股份制银行"
-    
-  is_st:           # 是否ST股票
-    type: boolean
-    default: false
-    
-  market_cap:      # 总市值（元）
-    type: float64
-    min_value: 0
-    
-  float_market_cap: # 流通市值（元）
-    type: float64
-    min_value: 0
-    
-  visibility_ts:    # 数据可见时间
-    type: datetime
-    timezone: "UTC"
-    required: true
-    
-  source:          # 数据源
-    type: string
-    example: "akshare"
-    required: true
-```
-
-### 2.2 日频价量数据 (Daily OHLCV)
-
-```yaml
-table: price_ohlcv_daily
-partition: [exchange, date]
-index: [symbol, date]
-
-fields:
-  symbol:           # 股票代码
-    type: string
-    format: "XXXXXX.XX"
-    required: true
-    
-  date:             # 交易日期
-    type: date
-    format: "YYYY-MM-DD"
-    required: true
-    
-  open:             # 开盘价
-    type: float64
-    precision: 2
-    min_value: 0
-    required: true
-    
-  high:             # 最高价
-    type: float64
-    precision: 2
-    min_value: 0
-    required: true
-    
-  low:              # 最低价
-    type: float64
-    precision: 2
-    min_value: 0
-    required: true
-    
-  close:            # 收盘价
-    type: float64
-    precision: 2
-    min_value: 0
-    required: true
-    
-  volume:           # 成交量（股）
-    type: int64
-    min_value: 0
-    required: true
-    
-  amount:           # 成交额（元）
-    type: float64
-    precision: 2
-    min_value: 0
-    
-  adj_factor:       # 复权因子
-    type: float64
-    precision: 6
-    default: 1.0
-    
-  pct_chg:          # 涨跌幅（%）
-    type: float64
-    precision: 4
-    
-  change:           # 涨跌额（元）
-    type: float64
-    precision: 2
-    
-  turnover:         # 换手率（%）
-    type: float64
-    precision: 4
-    min_value: 0
-    
-  amplitude:        # 振幅（%）
-    type: float64
-    precision: 4
-    min_value: 0
-    
-  is_trading_day:   # 是否交易日
-    type: boolean
-    default: true
-    
-  visibility_ts:    # 数据可见时间（T+1）
-    type: datetime
-    timezone: "UTC"
-    required: true
-    
-  source:           # 数据源
-    type: string
-    example: "akshare"
-    required: true
-    
-  mapping_version:  # 字段映射版本
-    type: string
-    example: "v1.0"
-    required: true
-
-# 数据约束
-constraints:
-  - high >= max(open, close)  # 最高价约束
-  - low <= min(open, close)   # 最低价约束
-  - volume >= 0               # 成交量非负
-  - amount >= 0               # 成交额非负
-```
-
-### 2.3 分钟频价量数据 (Minute OHLCV)
-
-```yaml
-table: price_ohlcv_minute
-partition: [exchange, date, period]
-index: [symbol, datetime]
-
-fields:
-  symbol:           # 股票代码
-    type: string
-    format: "XXXXXX.XX"
-    required: true
-    
-  datetime:         # 时间戳
-    type: datetime
-    timezone: "UTC"
-    required: true
-    
-  period:           # 周期（分钟）
-    type: int
-    enum: [1, 5, 15, 30, 60]
-    required: true
-    
-  open:             # 开盘价
-    type: float64
-    precision: 2
-    min_value: 0
-    required: true
-    
-  high:             # 最高价
-    type: float64
-    precision: 2
-    min_value: 0
-    required: true
-    
-  low:              # 最低价
-    type: float64
-    precision: 2
-    min_value: 0
-    required: true
-    
-  close:            # 收盘价
-    type: float64
-    precision: 2
-    min_value: 0
-    required: true
-    
-  volume:           # 成交量（股）
-    type: int64
-    min_value: 0
-    required: true
-    
-  amount:           # 成交额（元）
-    type: float64
-    precision: 2
-    min_value: 0
-    
-  visibility_ts:    # 数据可见时间
-    type: datetime
-    timezone: "UTC"
-    required: true
-    
-  source:           # 数据源
-    type: string
-    required: true
-```
-
-### 2.4 财务数据 (Fundamental Data)
-
-```yaml
-table: fundamental_quarterly
-partition: [period_year]
-index: [symbol, period]
-
-fields:
-  symbol:           # 股票代码
-    type: string
-    format: "XXXXXX.XX"
-    required: true
-    
-  period:           # 报告期
-    type: string
-    format: "YYYY-QX"
-    example: "2024-Q1"
-    required: true
-    
-  report_date:      # 报告发布日期
-    type: date
-    format: "YYYY-MM-DD"
-    required: true
-    
-  revenue:          # 营业收入（万元）
-    type: float64
-    precision: 2
-    
-  net_profit:       # 净利润（万元）
-    type: float64
-    precision: 2
-    
-  total_assets:     # 总资产（万元）
-    type: float64
-    precision: 2
-    min_value: 0
-    
-  net_assets:       # 净资产（万元）
-    type: float64
-    precision: 2
-    
-  eps_basic:        # 基本每股收益（元）
-    type: float64
-    precision: 4
-    
-  eps_diluted:      # 稀释每股收益（元）
-    type: float64
-    precision: 4
-    
-  roe:              # 净资产收益率（%）
-    type: float64
-    precision: 4
-    
-  roa:              # 总资产收益率（%）
-    type: float64
-    precision: 4
-    
-  debt_ratio:       # 资产负债率（%）
-    type: float64
-    precision: 4
-    min_value: 0
-    max_value: 100
-    
-  visibility_ts:    # 数据可见时间
-    type: datetime
-    timezone: "UTC"
-    required: true
-    
-  source:           # 数据源
-    type: string
-    required: true
-```
-
-### 2.5 交易日历 (Trading Calendar)
-
-```yaml
-table: trading_calendar
-index: date
-
-fields:
-  date:             # 日期
-    type: date
-    format: "YYYY-MM-DD"
-    required: true
-    
-  is_open:          # 是否开市
-    type: boolean
-    required: true
-    
-  exchange:         # 交易所
-    type: string
-    enum: ["SH", "SZ", "ALL"]
-    default: "ALL"
-    
-  holiday_name:     # 节假日名称
-    type: string
-    nullable: true
-    
-  created_at:       # 创建时间
-    type: datetime
-    timezone: "UTC"
-    required: true
-    
-  source:           # 数据源
-    type: string
-    required: true
-```
-
-## 3. 数据质量规范
-
-### 3.1 数据完整性检查
-
-```yaml
-completeness_rules:
-  missing_data:
-    threshold: 0.05  # 最大缺失率5%
-    severity: "warning"
-    
-  required_fields:
-    - symbol
-    - date/datetime
-    - open
-    - high
-    - low
-    - close
-    - volume
-    
-  date_continuity:
-    max_gap_days: 5  # 最大连续缺失5个交易日
-    severity: "warning"
-```
-
-### 3.2 数据一致性检查
-
-```yaml
-consistency_rules:
-  ohlc_logic:
-    - high >= max(open, close)
-    - low <= min(open, close)
-    - all_prices > 0
-    
-  volume_logic:
-    - volume >= 0
-    - amount >= 0
-    
-  date_logic:
-    - date <= current_date
-    - no_future_dates
-    - trading_days_only
-```
-
-### 3.3 数据准确性检查
-
-```yaml
-accuracy_rules:
-  outlier_detection:
-    price_change:
-      method: "zscore"
-      threshold: 3.0
-      
-    volume_spike:
-      method: "iqr"
-      multiplier: 5.0
-      
-  cross_validation:
-    multiple_sources: true
-    tolerance: 0.01  # 1%容差
-```
-
-## 4. API响应格式
-
-### 4.1 标准响应格式
+### 1.1 时间序列 (`timeseries.schema.json`)
 
 ```json
 {
-  "code": "000001.SZ",
-  "freq": "D",
-  "start_date": "2024-01-01",
-  "end_date": "2024-12-31",
-  "total_records": 245,
-  "rows": [
-    {
-      "datetime": "2024-01-02T00:00:00Z",
-      "open": 10.50,
-      "high": 10.80,
-      "low": 10.45,
-      "close": 10.75,
-      "volume": 12345678,
-      "amount": 132456789.50
-    }
-  ],
-  "metadata": {
-    "source": "akshare",
-    "last_updated": "2024-01-03T02:00:00Z",
-    "data_quality": "good"
-  }
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TimeSeriesRow",
+  "type": "object",
+  "properties": {
+    "symbol": {"type": "string"},
+    "ts": {"type": "string", "format": "date-time"},
+    "freq": {"type": "string", "enum": ["tick","1min","5min","day","week","month"]},
+    "fields": {"type": "object", "additionalProperties": {"type": ["number","string","null"]}},
+    "source": {"type": "string"},
+    "ingested_at": {"type": "string", "format": "date-time"}
+  },
+  "required": ["symbol","ts","freq","fields"],
+  "additionalProperties": false
 }
 ```
 
-### 4.2 错误响应格式
+### 1.2 事件 (`event.schema.json`)
 
 ```json
 {
-  "error": {
-    "code": "DATA_NOT_FOUND",
-    "message": "No data found for 000001.SZ in range 2024-01-01 to 2024-12-31",
-    "details": {
-      "symbol": "000001.SZ",
-      "start_date": "2024-01-01",
-      "end_date": "2024-12-31",
-      "available_range": {
-        "start": "2020-01-01",
-        "end": "2023-12-31"
-      }
-    },
-    "timestamp": "2024-01-03T10:30:00Z"
-  }
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CorporateEvent",
+  "type": "object",
+  "properties": {
+    "event_id": {"type":"string"},
+    "symbol": {"type":"string"},
+    "event_type": {"type":"string", "enum":["announcement","earnings","mna","buyback","dividend","management_change","supply_chain"]},
+    "event_time": {"type":"string","format":"date-time"},
+    "trading_day": {"type":"string","format":"date"},
+    "payload": {"type":"object"},
+    "source": {"type":"string"},
+    "delay": {"type":"integer","minimum":0}
+  },
+  "required":["event_id","symbol","event_type","event_time"],
+  "additionalProperties": false
 }
 ```
 
-## 5. 存储格式规范
+## 2. ClickHouse 表结构
 
-### 5.1 Parquet文件结构
+### 2.1 日线行情 `ts_1d`
 
-```
-data/parquet/
-├── D/                    # 日频数据
-│   ├── SH/              # 上交所
-│   │   ├── 600000.parquet
-│   │   └── 600519.parquet
-│   └── SZ/              # 深交所
-│       ├── 000001.parquet
-│       └── 000002.parquet
-├── 1m/                  # 1分钟数据
-│   ├── SH/
-│   │   └── 2024-01-02/
-│   │       ├── 600000.parquet
-│   │       └── 600519.parquet
-│   └── SZ/
-│       └── 2024-01-02/
-│           ├── 000001.parquet
-│           └── 000002.parquet
-└── metadata/            # 元数据
-    ├── symbols.parquet
-    ├── calendar.parquet
-    └── data_quality.parquet
+```sql
+CREATE TABLE ts_1d
+(
+  symbol String,
+  ts DateTime64(3, 'UTC'),
+  open Float64, high Float64, low Float64, close Float64,
+  volume Float64, amount Float64,
+  source LowCardinality(String),
+  ingested_at DateTime64(3, 'UTC')
+)
+ENGINE = MergeTree
+PARTITION BY toYYYYMM(ts)
+ORDER BY (symbol, ts);
 ```
 
-### 5.2 Qlib格式规范
+### 2.2 公司事件 `corporate_event`
 
-```
-data/qlib_cn_daily/
-├── calendars/
-│   └── day.txt          # 交易日历
-├── instruments/
-│   └── all.txt          # 股票列表
-├── features/
-│   ├── sh600000/
-│   │   ├── open.bin
-│   │   ├── high.bin
-│   │   ├── low.bin
-│   │   ├── close.bin
-│   │   ├── volume.bin
-│   │   └── date.bin
-│   └── sz000001/
-│       ├── open.bin
-│       └── ...
-└── metadata.json        # 元数据
+```sql
+CREATE TABLE corporate_event
+(
+  event_id String,
+  symbol String,
+  event_type LowCardinality(String),
+  event_time DateTime64(3, 'UTC'),
+  trading_day Date,
+  payload JSON,
+  source LowCardinality(String)
+)
+ENGINE = ReplacingMergeTree()
+PARTITION BY toYYYYMM(event_time)
+ORDER BY (symbol, event_time);
 ```
 
-## 6. 版本控制
+## 3. 数据治理与对齐
 
-### 6.1 模式版本
-- **当前版本**：v1.0
-- **向后兼容**：支持v1.x所有版本
-- **升级策略**：渐进式升级，保持API兼容性
+- **单位统一**：金额、股价 → CNY；数量 → 万/亿。
+- **时区**：存储 UTC，视图层转换 Asia/Shanghai。
+- **复权**：前复权字段作为默认回测输入，保留不复权核验。
+- **事件对齐**：`event_time → trading_day`，延迟 `delay = N`。
+- **质量校验**：缺失阈值 < 1%、跳变 > 8σ、重复去重、日线延迟 < 10 分钟。
 
-### 6.2 变更日志
+### 3.1 Great Expectations 规则片段
 
 ```yaml
-v1.0 (2024-01-01):
-  - 初始版本
-  - 定义核心数据模式
-  - 支持日频和分钟频数据
-  
-v1.1 (计划中):
-  - 添加期权数据支持
-  - 增强财务数据字段
-  - 优化存储格式
+expectations:
+  - expect_table_row_count_to_be_between: {min_value: 1}
+  - expect_column_values_to_not_be_null: {column: close, mostly: 0.995}
+  - expect_column_values_to_be_between: {column: volume, min_value: 0}
+  - expect_compound_columns_to_be_unique: {column_list: [symbol, ts]}
+  - expect_column_value_z_scores_to_be_less_than:
+      column: close
+      threshold: 8
 ```
 
-## 7. 数据治理
+## 4. 因子与特征
 
-### 7.1 数据血缘
-- **源头追踪**：每条数据记录source字段
-- **处理链路**：记录数据处理的每个步骤
-- **影响分析**：变更影响范围评估
+### 4.1 因子注册 (`factor.schema.json`)
 
-### 7.2 数据安全
-- **访问控制**：基于角色的数据访问权限
-- **审计日志**：记录所有数据访问和修改
-- **数据脱敏**：敏感数据自动脱敏处理
+字段说明：
 
-### 7.3 合规要求
-- **数据保留**：按监管要求保留历史数据
-- **隐私保护**：遵循数据保护法规
-- **免责声明**：所有输出数据包含免责声明
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | string | 因子唯一标识 |
+| `name` | string | 展示名称 |
+| `owner` | string | 维护团队 |
+| `category` | string | 价格/财务/情绪/事件 |
+| `source` | string | 数据来源表 |
+| `expression` | string | 计算表达式或 SQL/DSL |
+| `cleaning` | object | winsorize/normalize/neutralize 配置 |
+| `lag` | string | 滞后控制（如 `1d`）|
+| `window` | string | 滚动窗口范围 |
+| `alignment` | object | 事件对齐策略 |
+| `tags` | array | 检索标签 |
+
+#### 示例（`modules/factors/registry.yaml`）
+
+```yaml
+factors:
+  - id: px_turnover
+    name: Turnover Ratio
+    owner: quant-core
+    category: price_volume
+    source: ts_1d
+    expression: "Volume / FreeFloatShares"
+    cleaning:
+      winsorize: {method: mad, k: 5}
+      normalize: zscore
+      neutralize: {by: [industry_sw, mktcap_log]}
+    lag: 1d
+    window: "20d:120d"
+    tags: [liquidity, style]
+  - id: senti_news
+    name: News Sentiment
+    category: sentiment
+    source: news_agg
+    expression: "EMA(sentiment_score, 5)"
+    alignment: {by: event_time -> trading_day, delay: 1}
+    tags: [event, sentiment]
+```
+
+### 4.2 特征流水线
+
+`FeaturePipeline.materialize()` 步骤：
+
+1. 加载原始数据（行情/事件/财务）。
+2. 根据因子定义执行对齐（事件 → 交易日、滞后/冻结窗口）。
+3. 应用清洗策略（去极值、标准化、中性化）。
+4. 写入特征存储（Parquet/Arrow/ClickHouse 特征表）。
+
+## 5. Qlib 配置
+
+- **实验参数**：市场 `csi300`、基准 `SH000300`、模型 `LGBModel`、因子列表 `[px_turnover, senti_news, quality_roa, value_bp]`。
+- **标签**：`Ref($close, -5)/Ref($close, -1)-1`（未来 5 日收益）。
+- **回测策略**：`TopKDropoutStrategy`，`topk=50`，`n_drop=5`，`cost=0.001`，调仓频率 `weekly`。
+
+## 6. 知识图谱 Schema
+
+### 6.1 实体 (`kg-entity.schema.json`)
+
+- `entity_type` 枚举：Company、Person、Product、Event、Indicator。
+- `attributes` 存储行业、市值、角色等元数据。
+
+### 6.2 关系 (`kg-edge.schema.json`)
+
+- `relation` 枚举：HOLDING、SUPPLY、COMPETE、ANNOUNCE、LEADS、MENTIONS。
+- 支持权重、有效期窗口、附加属性。
+
+### 6.3 Neo4j 索引与查询
+
+```cypher
+CREATE INDEX company_code IF NOT EXISTS FOR (c:Company) ON (c.code);
+CREATE INDEX event_id IF NOT EXISTS FOR (e:Event) ON (e.event_id);
+
+MATCH (a:Company {code:$code})-[:SUPPLY*1..2]->(b:Company)
+OPTIONAL MATCH (a)-[:ANNOUNCE]->(e:Event)
+WHERE e.time >= datetime() - duration('P30D')
+RETURN a,b,collect(e) AS events;
+```
+
+## 7. 报告输出 (`report.schema.json`)
+
+- `metrics`：年化收益、夏普、最大回撤必填，支持 IC、IC_IR。
+- `sections`：标题 + Markdown 正文。
+- `artifacts`：图表/附件 URI。
+- `regime`：当前市场状态与置信度。
+- `holdings`：Top 持仓及权重。
+- `backtest`：标准化结果（`metrics`、`slices`、`charts`、`explain`）。
+
+## 8. SSE/WebSocket 指令
+
+```json
+{"op":"navigate","route":"analysis/backtest","params":{"task_id":"bt_20250920_001"}}
+{"op":"patch","target":"chart#equity_curve","payload":{"series":[["2025-01-01",1.0],["2025-01-02",1.01]]}}
+{"op":"modal","target":"param-fill","payload":{"missing":["horizon","risk"]}}
+{"op":"patch","target":"panel#explain","payload":{"shap_topk":["mom_5","quality_roa"],"events":[...]}}
+```
+
+## 9. 数据产品映射
+
+| 存储 | 用途 | 工具 |
+| --- | --- | --- |
+| Parquet (`data/parquet/`) | 原始与清洗后的时间序列 | Pandas/Polars, Spark |
+| ClickHouse (`ts_1d`, `corporate_event`) | 高频查询、特征对齐 | SQL, ch-bench |
+| Qlib (`data/qlib_bundle/`) | 模型训练、回测 | Qlib Python API |
+| Neo4j | 知识图谱查询 | Cypher, GraphQL |
+
+## 10. 质量与审计字段
+
+- `source`: 原始数据源（akshare/wind/news_crawler 等）。
+- `ingested_at`: 入库时间。
+- `visibility_ts`: 对外可见时间（DQ 驱动）。
+- `quality_score`、`quality_flags`: 用于 DQ 报告。
+- `trace_id`: 全链路追踪标记。
+
+> 数据契约须在变更前提 PR，Schema 变动需更新 `version` 与兼容策略，并同步告知下游（Orchestrator、前端、分析脚本）。

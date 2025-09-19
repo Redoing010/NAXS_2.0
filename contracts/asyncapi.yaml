@@ -1,0 +1,93 @@
+asyncapi: 2.6.0
+info:
+  title: NAXS Streams
+  version: 0.1.0
+  description: Event streams used by the NAXS 3.0 orchestrator and downstream services.
+servers:
+  redis:
+    url: redis://redis:6379
+    protocol: redis
+    description: Primary Redis Streams bus
+  rabbitmq:
+    url: amqp://mq:5672
+    protocol: amqp
+    description: Optional RabbitMQ fallback for high volume tasks
+defaultContentType: application/json
+channels:
+  data.ingested:
+    description: Fired when new market or factor data is persisted into the platform.
+    subscribe:
+      summary: Data consumers process newly ingested rows.
+      operationId: consumeIngestedData
+      message:
+        $ref: '#/components/messages/DataRow'
+  dq.alert:
+    description: Quality guardrail notifications emitted by Great Expectations runs.
+    publish:
+      summary: Data quality jobs publish alerts for observability systems.
+      operationId: publishDQAlert
+      message:
+        $ref: '#/components/messages/DataQualityAlert'
+  backtest.scheduled:
+    description: Signals that a backtest job has been accepted and enqueued.
+    publish:
+      message:
+        $ref: '#/components/messages/BacktestScheduled'
+  backtest.completed:
+    description: Contains the final metrics and artifacts for a completed backtest.
+    publish:
+      message:
+        $ref: '#/components/messages/BacktestResult'
+  report.ready:
+    description: Emitted when the report service finishes materialising a report artifact.
+    publish:
+      message:
+        $ref: '#/components/messages/Report'
+components:
+  messages:
+    DataRow:
+      name: DataRow
+      title: Time series data row
+      payload:
+        $ref: 'schemas/timeseries.schema.json'
+    DataQualityAlert:
+      name: DataQualityAlert
+      payload:
+        type: object
+        required: [rule_id, dataset, severity, detected_at]
+        properties:
+          rule_id:
+            type: string
+          dataset:
+            type: string
+          severity:
+            type: string
+            enum: [info, warning, critical]
+          detected_at:
+            type: string
+            format: date-time
+          summary:
+            type: string
+          details:
+            type: object
+    BacktestScheduled:
+      name: BacktestScheduled
+      payload:
+        type: object
+        required: [task_id, submitted_by, eta]
+        properties:
+          task_id:
+            type: string
+          submitted_by:
+            type: string
+          eta:
+            type: integer
+            description: Estimated completion time in seconds
+    BacktestResult:
+      name: BacktestResult
+      payload:
+        $ref: 'schemas/report.schema.json#/definitions/backtest'
+    Report:
+      name: Report
+      payload:
+        $ref: 'schemas/report.schema.json'
