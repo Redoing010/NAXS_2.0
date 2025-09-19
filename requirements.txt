@@ -14,6 +14,11 @@ akshare==1.12.85
 
 # 量化框架
 qlib==0.9.4
+backtrader==1.9.78.123
+
+# 金融数据接口
+tushare==1.2.89
+yfinance==0.2.40
 
 # 系统监控
 psutil==5.9.6

@@ -9,6 +9,13 @@ pyarrow==16.1.0
 orjson==3.10.7
 akshare==1.12.99
 
+# Market Data APIs
+tushare==1.2.89
+yfinance==0.2.40
+
+# Quant Frameworks
+backtrader==1.9.78.123
+
 # Database & ORM
 sqlalchemy==2.0.23
 alembic==1.12.1
