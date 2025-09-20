@@ -1,14 +1,27 @@
 # 交易日历模块
 
-import akshare as ak
-import pandas as pd
-from typing import List, Set, Union
-from datetime import datetime, date, timedelta
-import logging
-from pathlib import Path
+from __future__ import annotations
+
+import importlib
+from importlib import util as importlib_util
 import json
+import logging
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import List, Set, Union
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+_akshare_spec = importlib_util.find_spec("akshare")
+if _akshare_spec is not None:
+    ak = importlib.import_module("akshare")  # type: ignore[import-untyped]
+else:  # pragma: no cover - 仅在缺少AkShare时执行
+    ak = None  # type: ignore[assignment]
+    logger.warning(
+        "AkShare package is not available; TradingCalendar will rely on fallback calendars."
+    )
 
 
 class TradingCalendar:
@@ -32,46 +45,46 @@ class TradingCalendar:
         """
         try:
             logger.info(f"获取交易日历: {start_year}-{end_year}")
-            
+
             # 尝试从缓存加载
             cached_dates = self._load_from_cache(start_year, end_year)
             if cached_dates:
                 logger.info(f"从缓存加载交易日历，共 {len(cached_dates)} 个交易日")
                 return cached_dates
-            
-            # 从AkShare获取
-            trading_dates = []
-            
-            for year in range(start_year, end_year + 1):
-                try:
-                    year_dates = ak.tool_trade_date_hist_sina()
-                    if year_dates is not None and not year_dates.empty:
-                        # 过滤指定年份的日期
-                        year_dates_filtered = [
-                            d.strftime('%Y-%m-%d') if isinstance(d, (date, datetime)) else str(d)
-                            for d in year_dates['trade_date'].tolist() 
-                            if (isinstance(d, (date, datetime)) and d.year == year) or 
-                               (isinstance(d, str) and d.startswith(str(year)))
-                        ]
-                        trading_dates.extend(year_dates_filtered)
-                        logger.info(f"获取 {year} 年交易日 {len(year_dates_filtered)} 个")
-                except Exception as e:
-                    logger.warning(f"获取 {year} 年交易日失败: {e}")
-                    continue
-            
-            # 去重并排序
-            trading_dates = sorted(list(set(trading_dates)))
-            
-            # 保存到缓存
+
+            if ak is None:
+                logger.info("AkShare不可用，使用备用交易日历")
+                return self._generate_fallback_calendar(start_year, end_year)
+
+            df = ak.tool_trade_date_hist_sina()  # type: ignore[attr-defined]
+            if df is None or df.empty:
+                logger.warning("未获取到交易日历，使用备用交易日历")
+                return self._generate_fallback_calendar(start_year, end_year)
+
+            df['trade_date'] = pd.to_datetime(df['trade_date'])
+            df = df[
+                (df['trade_date'].dt.year >= start_year) &
+                (df['trade_date'].dt.year <= end_year)
+            ]
+
+            trading_dates = (
+                df['trade_date']
+                .dt.strftime('%Y-%m-%d')
+                .drop_duplicates()
+                .sort_values()
+                .tolist()
+            )
+
             self._save_to_cache(trading_dates, start_year, end_year)
-            
+
             logger.info(f"成功获取交易日历，共 {len(trading_dates)} 个交易日")
             return trading_dates
-            
+
         except Exception as e:
             logger.error(f"获取交易日历失败: {e}")
-            # 返回备用日历（工作日，排除节假日）
-            return self._generate_fallback_calendar(start_year, end_year)
+            fallback = self._generate_fallback_calendar(start_year, end_year)
+            logger.info("使用备用交易日历，共 %d 个交易日", len(fallback))
+            return fallback
     
     def _load_from_cache(self, start_year: int, end_year: int) -> List[str]:
         """从缓存加载交易日历"""
