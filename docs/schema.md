@@ -2,6 +2,8 @@
 
 本文档定义了NAXS系统中所有数据的标准模式和字段规范，确保数据的一致性和可追溯性。
 
+> **DDL位置**：对应的ClickHouse建表脚本保存在 [`docs/sql/clickhouse_schema.sql`](sql/clickhouse_schema.sql) 中，执行方式详见《RUNBOOK.md》中的“ClickHouse Schema 部署”章节。
+
 ## 1. 数据标准化原则
 
 ### 1.1 命名规范
