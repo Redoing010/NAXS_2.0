@@ -1,7 +1,7 @@
 # NAXS项目依赖包
 
 # 核心框架
-fastapi==0.104.1
+fastapi==0.114.0
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
