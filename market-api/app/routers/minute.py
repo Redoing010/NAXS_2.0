@@ -1,5 +1,8 @@
-import akshare as ak
-from fastapi import APIRouter, Query
+try:
+    import akshare as ak
+except ImportError:  # pragma: no cover - optional dependency
+    ak = None  # type: ignore
+from fastapi import APIRouter, Query, HTTPException
 from ..config import settings
 from ..cache import get_cache, set_cache
 from ..utils import normalize_columns, MINUTE_COLS_MAP
@@ -18,6 +21,9 @@ def get_minute(
 ):
     cache_key = f"min_{symbol}_{period}_{adjust}"
     df = get_cache(cache_key, settings.TTL_MINUTE)
+
+    if ak is None:
+        raise HTTPException(status_code=503, detail="akshare dependency is not installed")
 
     if df is None:
         df = ak.stock_zh_a_hist_min_em(symbol=symbol, period=period, adjust=adjust)

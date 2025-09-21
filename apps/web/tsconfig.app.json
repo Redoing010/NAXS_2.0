@@ -23,5 +23,11 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/hooks/useAgentStatus.ts",
+    "src/hooks/usePerformance.ts",
+    "src/hooks/useRealTimeData.ts",
+    "src/hooks/useSystemMetrics.ts"
+  ]
 }

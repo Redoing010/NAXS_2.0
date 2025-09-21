@@ -6,7 +6,11 @@ import logging
 from typing import Any, Dict, Optional, Union, Callable
 from functools import wraps
 from cachetools import TTLCache, LRUCache
-import aioredis
+
+try:
+    import aioredis
+except ImportError:  # pragma: no cover - optional dependency
+    aioredis = None  # type: ignore
 from .config import settings
 
 logger = logging.getLogger(__name__)
@@ -42,6 +46,11 @@ class CacheManager:
     async def initialize(self):
         """初始化Redis连接"""
         try:
+            if aioredis is None:
+                logger.warning("aioredis not installed, falling back to in-memory cache only")
+                self.redis_client = None
+                return
+
             self.redis_pool = aioredis.ConnectionPool.from_url(
                 settings.REDIS_URL,
                 max_connections=settings.REDIS_POOL_SIZE,

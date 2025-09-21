@@ -1,6 +1,9 @@
 import pandas as pd
-import akshare as ak
-from fastapi import APIRouter, Query, Depends
+try:
+    import akshare as ak
+except ImportError:  # pragma: no cover - optional dependency
+    ak = None  # type: ignore
+from fastapi import APIRouter, Query, Depends, HTTPException
 from ..config import settings
 from ..cache import get_cache, set_cache
 from ..utils import normalize_columns, to_numeric, SPOT_COLS_MAP
@@ -18,6 +21,8 @@ def get_spot(
     pg=Depends(pagination),
 ):
     cache_key = "spot_all"
+    if ak is None:
+        raise HTTPException(status_code=503, detail="akshare dependency is not installed")
     df = get_cache(cache_key, settings.TTL_SPOT_ALL)
     if df is None:
         raw = ak.stock_zh_a_spot()
