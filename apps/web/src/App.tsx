@@ -40,7 +40,7 @@ function AppContent() {
       case 'settings':
         return <SettingsPage />;
       default:
-        return <Dashboard />;
+        return <EnhancedChatInterface />;
     }
   };
 

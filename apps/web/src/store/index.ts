@@ -261,7 +261,7 @@ export const useAppStore = create<AppState & AppActions>()(
         
         ui: {
           sidebarOpen: true,
-          currentView: 'dashboard' as const,
+          currentView: 'chat' as const,
           theme: 'light' as const,
           notifications: [],
         },
