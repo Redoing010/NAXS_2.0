@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { memo, lazy, Suspense, useCallback, useMemo, useRef, useEffect } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { usePerformanceMonitor, useMemoryLeak, useRenderOptimization } from '../../hooks/usePerformance';

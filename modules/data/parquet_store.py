@@ -1,8 +1,12 @@
 # Parquet存储模块
 
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
+try:
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+except ImportError:  # pragma: no cover - optional dependency
+    pa = None  # type: ignore
+    pq = None  # type: ignore
 from typing import List, Optional, Union, Dict
 from datetime import datetime, date
 from pathlib import Path
@@ -16,8 +20,10 @@ logger = logging.getLogger(__name__)
 
 class ParquetStore(IDataStore):
     """Parquet存储实现类"""
-    
+
     def __init__(self, compression: str = "snappy"):
+        if pa is None or pq is None:
+            raise RuntimeError("pyarrow dependency is required for ParquetStore")
         self.compression = compression
         self.trading_calendar = get_trading_calendar()
         logger.info(f"ParquetStore初始化完成，压缩格式: {compression}")

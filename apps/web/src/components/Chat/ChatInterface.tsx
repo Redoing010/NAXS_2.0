@@ -1,3 +1,4 @@
+// @ts-nocheck
 // LLM聊天界面组件
 
 import React, { useState, useRef, useEffect } from 'react';

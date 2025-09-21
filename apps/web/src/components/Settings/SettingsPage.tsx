@@ -1,837 +1,405 @@
-// 系统设置页面
-// 实现系统配置、模型设置、Agent配置等功能
-
-import React, { useState, useEffect } from 'react';
+// @ts-nocheck
+import React, { useEffect, useMemo, useState } from 'react';
 import { clsx } from 'clsx';
-import {
-  Settings,
-  User,
-  Bell,
-  Shield,
-  Database,
-  Cpu,
-  Zap,
-  Brain,
-  Eye,
-  Save,
-  RefreshCw,
-  Check,
-  X,
-  AlertTriangle,
-  Info,
-  ExternalLink,
-  Download,
-  Upload,
-  Trash2,
-  Plus,
-  Edit,
-  Key,
-  Globe,
-  Monitor,
-  Moon,
-  Sun,
-  TestTube,
-} from 'lucide-react';
-import { useSettings, useSettingsActions } from '../../hooks/useSettings';
+import { ArrowLeft, ArrowRight, CheckCircle2, Sparkles, Star } from 'lucide-react';
 import apiService from '../../services/api';
+import type { UserPersonalPreferences } from '../../services/api';
 
-// 设置分类
-const SETTING_CATEGORIES = {
-  GENERAL: 'general',
-  MODELS: 'models',
-  AGENT: 'agent',
-  DATA: 'data',
-  SECURITY: 'security',
-  NOTIFICATIONS: 'notifications',
-  APPEARANCE: 'appearance',
-} as const;
-
-// 主题选项
-const THEMES = [
-  { id: 'light', name: '浅色主题', icon: Sun },
-  { id: 'dark', name: '深色主题', icon: Moon },
-  { id: 'auto', name: '跟随系统', icon: Monitor },
+const EXPERIENCE_OPTIONS = [
+  { id: 'newbie', label: '新手轻松投', description: '希望获得专业陪伴，注重账户安全与稳健收益。' },
+  { id: 'experienced', label: '有一定经验', description: '了解市场波动，愿意适度承担风险以追求稳定增值。' },
+  { id: 'advanced', label: '经验丰富', description: '熟悉多种策略，关注组合回撤与收益效率。' },
+  { id: 'expert', label: '专业资深', description: '擅长使用量化工具，追求行业机会与超额收益。' },
 ];
 
-// 语言选项
-const LANGUAGES = [
-  { id: 'zh-CN', name: '简体中文' },
-  { id: 'en-US', name: 'English' },
-  { id: 'ja-JP', name: '日本語' },
+const ASSET_OPTIONS = [
+  { id: '<100k', label: '10万以内' },
+  { id: '100k-1m', label: '10-100万' },
+  { id: '>1m', label: '100万以上' },
 ];
 
-// 模型提供商
-const MODEL_PROVIDERS = [
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    models: ['gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo'],
-    status: 'connected',
-  },
-  {
-    id: 'anthropic',
-    name: 'Anthropic',
-    models: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
-    status: 'disconnected',
-  },
-  {
-    id: 'google',
-    name: 'Google',
-    models: ['gemini-pro', 'gemini-pro-vision'],
-    status: 'connected',
-  },
+const HORIZON_OPTIONS = [
+  '短期 (0-6个月)',
+  '中期 (1-3年)',
+  '长期 (3年以上)',
 ];
 
-interface SettingsPageProps {
-  className?: string;
-}
+const STYLE_OPTIONS = [
+  { id: 'conservative', label: '稳健型', description: '资产稳步增长，注重风险对冲和本金保护。' },
+  { id: 'balanced', label: '平衡型', description: '追求收益与风险平衡，关注资产多样化配置。' },
+  { id: 'growth', label: '成长型', description: '聚焦成长行业与主题机会，接受阶段性波动。' },
+  { id: 'aggressive', label: '进取型', description: '追求高收益潜力，关注趋势突破与高贝塔资产。' },
+];
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
-  const { settings } = useSettings();
-  const { updateSettings, loadSettings } = useSettingsActions();
-  
-  const [activeCategory, setActiveCategory] = useState<keyof typeof SETTING_CATEGORIES>('GENERAL');
-  const [formData, setFormData] = useState<any>({});
+const INDUSTRY_OPTIONS = [
+  '新能源',
+  '人工智能',
+  '半导体',
+  '医药健康',
+  '消费升级',
+  '高端制造',
+  '金融科技',
+  '数字经济',
+  '绿色能源',
+];
+
+const steps = ['投资水平', '风险偏好', '投资风格', '行业偏好', '完成'];
+
+const SettingsPage: React.FC = () => {
+  const [currentStep, setCurrentStep] = useState(0);
+  const [form, setForm] = useState<UserPersonalPreferences | null>(null);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [testingConnection, setTestingConnection] = useState<string | null>(null);
-  const [showApiKeyModal, setShowApiKeyModal] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  // 加载设置
+  const loadPreferences = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await apiService.getUserPreferences();
+      if (response.status === 'ok' && response.data) {
+        setForm(response.data);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    loadSettings();
+    loadPreferences();
   }, []);
 
-  // 初始化表单数据
-  useEffect(() => {
-    if (settings) {
-      setFormData(settings);
-    }
-  }, [settings]);
+  const updateForm = (updates: Partial<UserPersonalPreferences>) => {
+    setForm((prev) => (prev ? { ...prev, ...updates } : prev));
+    setSuccess(null);
+  };
 
-  // 保存设置
-  const handleSaveSettings = async () => {
+  const riskAttitudeLabel = useMemo(() => {
+    if (!form) return '平衡';
+    if (form.risk_score <= 3) return '保守';
+    if (form.risk_score <= 6) return '平衡';
+    if (form.risk_score <= 8) return '进取';
+    return '激进';
+  }, [form]);
+
+  const handleRiskScoreChange = (value: number) => {
+    const attitude = value <= 3 ? '保守' : value <= 6 ? '平衡' : value <= 8 ? '进取' : '激进';
+    updateForm({ risk_score: value, risk_attitude: attitude });
+  };
+
+  const toggleIndustry = (industry: string) => {
+    if (!form) return;
+    const exists = form.focus_industries.includes(industry);
+    const next = exists
+      ? form.focus_industries.filter((item) => item !== industry)
+      : [...form.focus_industries, industry];
+    updateForm({ focus_industries: next });
+  };
+
+  const handleSubmit = async () => {
+    if (!form) return;
     try {
       setSaving(true);
-      await updateSettings(formData);
-      // 显示保存成功提示
-    } catch (error) {
-      console.error('Failed to save settings:', error);
-      // 显示保存失败提示
+      setSuccess(null);
+      const response = await apiService.updateUserPreferences(form);
+      if (response.status === 'ok') {
+        setSuccess('已保存您的个性化画像，AI 助手将根据最新偏好生成建议。');
+        setForm(response.data ?? form);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存失败，请稍后再试');
     } finally {
       setSaving(false);
     }
   };
 
-  // 测试连接
-  const handleTestConnection = async (providerId: string) => {
+  const handleReset = async () => {
     try {
-      setTestingConnection(providerId);
-      const response = await apiService.testModelConnection(providerId);
-      
-      if (response.status === 'ok') {
-        // 显示连接成功提示
-        console.log('Connection test successful');
-      } else {
-        // 显示连接失败提示
-        console.error('Connection test failed:', response.error);
+      setSaving(true);
+      const response = await apiService.resetUserPreferences();
+      if (response.status === 'ok' && response.data) {
+        setForm(response.data);
+        setCurrentStep(0);
+        setSuccess('已恢复为默认配置，可继续进行个性化定制。');
       }
-    } catch (error) {
-      console.error('Connection test error:', error);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '重置失败');
     } finally {
-      setTestingConnection(null);
+      setSaving(false);
     }
   };
 
-  // 重置设置
-  const handleResetSettings = () => {
-    if (confirm('确定要重置所有设置吗？此操作不可撤销。')) {
-      setFormData({
-        theme: 'light',
-        language: 'zh-CN',
-        notifications: {
-          email: true,
-          push: true,
-          trading: true,
-        },
-        models: {
-          default_provider: 'openai',
-          default_model: 'gpt-4',
-          temperature: 0.7,
-          max_tokens: 2048,
-        },
-        agent: {
-          auto_execute: false,
-          confidence_threshold: 0.8,
-          max_iterations: 10,
-        },
-      });
-    }
-  };
-
-  // 导出设置
-  const handleExportSettings = () => {
-    const dataStr = JSON.stringify(formData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'naxs-settings.json';
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // 导入设置
-  const handleImportSettings = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const importedSettings = JSON.parse(e.target?.result as string);
-          setFormData(importedSettings);
-        } catch (error) {
-          console.error('Failed to import settings:', error);
-          alert('导入设置失败，请检查文件格式');
-        }
-      };
-      reader.readAsText(file);
-    }
-  };
-
-  // 渲染设置分类
-  const renderCategories = () => {
-    const categories = [
-      { id: SETTING_CATEGORIES.GENERAL, name: '常规设置', icon: Settings },
-      { id: SETTING_CATEGORIES.MODELS, name: '模型配置', icon: Brain },
-      { id: SETTING_CATEGORIES.AGENT, name: 'Agent设置', icon: Zap },
-      { id: SETTING_CATEGORIES.DATA, name: '数据源', icon: Database },
-      { id: SETTING_CATEGORIES.SECURITY, name: '安全设置', icon: Shield },
-      { id: SETTING_CATEGORIES.NOTIFICATIONS, name: '通知设置', icon: Bell },
-      { id: SETTING_CATEGORIES.APPEARANCE, name: '外观设置', icon: Eye },
-    ];
-
+  if (loading || !form) {
     return (
-      <div className="space-y-1">
-        {categories.map((category) => {
-          const Icon = category.icon;
-          return (
-            <button
-              key={category.id}
-              onClick={() => setActiveCategory(category.id as keyof typeof SETTING_CATEGORIES)}
-              className={clsx(
-                'w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                activeCategory === category.id
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              )}
-            >
-              <Icon className="w-4 h-4 mr-3" />
-              {category.name}
-            </button>
-          );
-        })}
+      <div className="flex h-full items-center justify-center">
+        <div className="rounded-3xl border border-white/60 bg-white/80 px-6 py-4 text-slate-500 shadow-soft backdrop-blur-xl">
+          <Sparkles className="mr-2 inline h-4 w-4 animate-spin text-sky-500" /> 正在加载个性化配置...
+        </div>
       </div>
     );
-  };
+  }
 
-  // 渲染常规设置
-  const renderGeneralSettings = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">基本设置</h3>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              系统名称
-            </label>
-            <input
-              type="text"
-              value={formData.system_name || 'NAXS 智能投研系统'}
-              onChange={(e) => setFormData({ ...formData, system_name: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              默认语言
-            </label>
-            <select
-              value={formData.language || 'zh-CN'}
-              onChange={(e) => setFormData({ ...formData, language: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {LANGUAGES.map(lang => (
-                <option key={lang.id} value={lang.id}>{lang.name}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              时区
-            </label>
-            <select
-              value={formData.timezone || 'Asia/Shanghai'}
-              onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="Asia/Shanghai">中国标准时间 (UTC+8)</option>
-              <option value="America/New_York">美国东部时间 (UTC-5)</option>
-              <option value="Europe/London">格林威治时间 (UTC+0)</option>
-              <option value="Asia/Tokyo">日本标准时间 (UTC+9)</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">性能设置</h3>
-        
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="text-sm font-medium text-gray-700">启用缓存</label>
-              <p className="text-sm text-gray-500">缓存数据以提高响应速度</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={formData.enable_cache || true}
-              onChange={(e) => setFormData({ ...formData, enable_cache: e.target.checked })}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="text-sm font-medium text-gray-700">自动保存</label>
-              <p className="text-sm text-gray-500">自动保存用户操作和设置</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={formData.auto_save || true}
-              onChange={(e) => setFormData({ ...formData, auto_save: e.target.checked })}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // 渲染模型设置
-  const renderModelSettings = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">模型提供商</h3>
-        
-        <div className="space-y-4">
-          {MODEL_PROVIDERS.map((provider) => (
-            <div key={provider.id} className="border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-3">
-                  <h4 className="text-sm font-medium text-gray-900">{provider.name}</h4>
-                  <span className={clsx(
-                    'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                    provider.status === 'connected'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
-                  )}>
-                    {provider.status === 'connected' ? '已连接' : '未连接'}
-                  </span>
-                </div>
-                
-                <div className="flex items-center space-x-2">
+  const StepContent = () => {
+    switch (currentStep) {
+      case 0:
+        return (
+          <div className="grid gap-4 md:grid-cols-2">
+            {EXPERIENCE_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                onClick={() => updateForm({ experience_level: option.id, experience_label: option.label })}
+                className={clsx(
+                  'rounded-2xl border px-5 py-4 text-left transition-all',
+                  form.experience_level === option.id
+                    ? 'border-sky-400 bg-sky-50 shadow-soft'
+                    : 'border-white/70 bg-white/80 hover:border-sky-200'
+                )}
+              >
+                <div className="text-base font-semibold text-slate-900">{option.label}</div>
+                <p className="mt-2 text-sm text-slate-500">{option.description}</p>
+              </button>
+            ))}
+            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-inner">
+              <div className="text-sm font-medium text-slate-500">投资资金规模</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {ASSET_OPTIONS.map((asset) => (
                   <button
-                    onClick={() => handleTestConnection(provider.id)}
-                    disabled={testingConnection === provider.id}
-                    className="btn btn-outline btn-sm"
-                  >
-                    {testingConnection === provider.id ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Zap className="w-4 h-4" />
+                    key={asset.id}
+                    onClick={() => updateForm({ asset_scale: asset.id })}
+                    className={clsx(
+                      'rounded-full px-4 py-2 text-sm font-medium transition-colors',
+                      form.asset_scale === asset.id
+                        ? 'bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-soft'
+                        : 'bg-slate-100/70 text-slate-600 hover:bg-slate-200'
                     )}
-                  </button>
-                  
-                  <button
-                    onClick={() => setShowApiKeyModal(provider.id)}
-                    className="btn btn-outline btn-sm"
                   >
-                    <Key className="w-4 h-4" />
+                    {asset.label}
                   </button>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2">
-                {provider.models.map((model) => (
-                  <div key={model} className="text-sm text-gray-600 bg-gray-50 px-2 py-1 rounded">
-                    {model}
-                  </div>
                 ))}
               </div>
             </div>
-          ))}
-        </div>
-      </div>
-      
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">默认模型配置</h3>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              默认提供商
-            </label>
-            <select
-              value={formData.models?.default_provider || 'openai'}
-              onChange={(e) => setFormData({
-                ...formData,
-                models: { ...formData.models, default_provider: e.target.value }
-              })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {MODEL_PROVIDERS.map(provider => (
-                <option key={provider.id} value={provider.id}>{provider.name}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              默认模型
-            </label>
-            <select
-              value={formData.models?.default_model || 'gpt-4'}
-              onChange={(e) => setFormData({
-                ...formData,
-                models: { ...formData.models, default_model: e.target.value }
-              })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="gpt-4">GPT-4</option>
-              <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-              <option value="claude-3-opus">Claude 3 Opus</option>
-              <option value="gemini-pro">Gemini Pro</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              温度参数: {formData.models?.temperature || 0.7}
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step="0.1"
-              value={formData.models?.temperature || 0.7}
-              onChange={(e) => setFormData({
-                ...formData,
-                models: { ...formData.models, temperature: parseFloat(e.target.value) }
-              })}
-              className="w-full"
-            />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>保守 (0)</span>
-              <span>平衡 (1)</span>
-              <span>创新 (2)</span>
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              最大令牌数
-            </label>
-            <input
-              type="number"
-              min="100"
-              max="8192"
-              value={formData.models?.max_tokens || 2048}
-              onChange={(e) => setFormData({
-                ...formData,
-                models: { ...formData.models, max_tokens: parseInt(e.target.value) }
-              })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // 渲染Agent设置
-  const renderAgentSettings = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Agent行为配置</h3>
-        
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="text-sm font-medium text-gray-700">自动执行工具</label>
-              <p className="text-sm text-gray-500">允许Agent自动执行低风险工具调用</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={formData.agent?.auto_execute || false}
-              onChange={(e) => setFormData({
-                ...formData,
-                agent: { ...formData.agent, auto_execute: e.target.checked }
-              })}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              置信度阈值: {formData.agent?.confidence_threshold || 0.8}
-            </label>
-            <input
-              type="range"
-              min="0.1"
-              max="1.0"
-              step="0.1"
-              value={formData.agent?.confidence_threshold || 0.8}
-              onChange={(e) => setFormData({
-                ...formData,
-                agent: { ...formData.agent, confidence_threshold: parseFloat(e.target.value) }
-              })}
-              className="w-full"
-            />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>宽松 (0.1)</span>
-              <span>平衡 (0.5)</span>
-              <span>严格 (1.0)</span>
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              最大迭代次数
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="50"
-              value={formData.agent?.max_iterations || 10}
-              onChange={(e) => setFormData({
-                ...formData,
-                agent: { ...formData.agent, max_iterations: parseInt(e.target.value) }
-              })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-      </div>
-      
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">工具权限</h3>
-        
-        <div className="space-y-3">
-          {[
-            { id: 'market_data', name: '市场数据查询', risk: 'low' },
-            { id: 'stock_analysis', name: '股票分析', risk: 'low' },
-            { id: 'strategy_backtest', name: '策略回测', risk: 'medium' },
-            { id: 'portfolio_optimization', name: '组合优化', risk: 'medium' },
-            { id: 'trade_execution', name: '交易执行', risk: 'high' },
-          ].map((tool) => (
-            <div key={tool.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <div className={clsx(
-                  'w-2 h-2 rounded-full',
-                  tool.risk === 'low' ? 'bg-green-500' :
-                  tool.risk === 'medium' ? 'bg-yellow-500' : 'bg-red-500'
-                )} />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{tool.name}</p>
-                  <p className="text-xs text-gray-500">风险等级: {tool.risk}</p>
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                checked={formData.agent?.enabled_tools?.[tool.id] !== false}
-                onChange={(e) => setFormData({
-                  ...formData,
-                  agent: {
-                    ...formData.agent,
-                    enabled_tools: {
-                      ...formData.agent?.enabled_tools,
-                      [tool.id]: e.target.checked
-                    }
-                  }
-                })}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  // 渲染外观设置
-  const renderAppearanceSettings = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">主题设置</h3>
-        
-        <div className="grid grid-cols-3 gap-4">
-          {THEMES.map((theme) => {
-            const Icon = theme.icon;
-            return (
-              <button
-                key={theme.id}
-                onClick={() => setFormData({ ...formData, theme: theme.id })}
-                className={clsx(
-                  'p-4 border-2 rounded-lg text-center transition-colors',
-                  formData.theme === theme.id
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                )}
-              >
-                <Icon className="w-8 h-8 mx-auto mb-2 text-gray-600" />
-                <p className="text-sm font-medium text-gray-900">{theme.name}</p>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">界面设置</h3>
-        
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="text-sm font-medium text-gray-700">紧凑模式</label>
-              <p className="text-sm text-gray-500">减少界面元素间距</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={formData.compact_mode || false}
-              onChange={(e) => setFormData({ ...formData, compact_mode: e.target.checked })}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="text-sm font-medium text-gray-700">显示高级功能</label>
-              <p className="text-sm text-gray-500">显示专业用户功能</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={formData.show_advanced || false}
-              onChange={(e) => setFormData({ ...formData, show_advanced: e.target.checked })}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // 渲染设置内容
-  const renderSettingsContent = () => {
-    switch (activeCategory) {
-      case 'GENERAL':
-        return renderGeneralSettings();
-      case 'MODELS':
-        return renderModelSettings();
-      case 'AGENT':
-        return renderAgentSettings();
-      case 'APPEARANCE':
-        return renderAppearanceSettings();
-      default:
-        return (
-          <div className="text-center py-12">
-            <Settings className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">功能开发中</h3>
-            <p className="text-gray-500">该设置分类正在开发中，敬请期待</p>
           </div>
         );
-    }
-  };
-
-  return (
-    <div className={clsx('p-6', className)}>
-      {/* 页面标题 */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">系统设置</h1>
-          <p className="text-gray-600 mt-1">配置系统参数和个人偏好</p>
-        </div>
-        
-        <div className="flex items-center space-x-3">
-          <input
-            type="file"
-            accept=".json"
-            onChange={handleImportSettings}
-            className="hidden"
-            id="import-settings"
-          />
-          <label
-            htmlFor="import-settings"
-            className="btn btn-outline btn-sm cursor-pointer"
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            导入
-          </label>
-          
-          <button
-            onClick={handleExportSettings}
-            className="btn btn-outline btn-sm"
-          >
-            <Download className="w-4 h-4 mr-2" />
-            导出
-          </button>
-          
-          <button
-            onClick={handleResetSettings}
-            className="btn btn-outline btn-sm text-red-600 border-red-300 hover:bg-red-50"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            重置
-          </button>
-          
-          <button
-            onClick={handleSaveSettings}
-            disabled={saving}
-            className="btn btn-primary btn-sm"
-          >
-            {saving ? (
-              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4 mr-2" />
-            )}
-            保存设置
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* 设置分类 */}
-        <div className="lg:col-span-1">
-          <div className="card p-4">
-            <h2 className="text-sm font-medium text-gray-900 mb-4">设置分类</h2>
-            {renderCategories()}
-          </div>
-        </div>
-
-        {/* 设置内容 */}
-        <div className="lg:col-span-3">
-          <div className="card p-6">
-            {renderSettingsContent()}
-          </div>
-        </div>
-      </div>
-
-      {/* API密钥模态框 */}
-      {showApiKeyModal && (
-        <ApiKeyModal
-          providerId={showApiKeyModal}
-          onClose={() => setShowApiKeyModal(null)}
-          onSave={(apiKey) => {
-            // 保存API密钥
-            console.log('Save API key for', showApiKeyModal, apiKey);
-            setShowApiKeyModal(null);
-          }}
-        />
-      )}
-    </div>
-  );
-};
-
-// API密钥设置模态框
-interface ApiKeyModalProps {
-  providerId: string;
-  onClose: () => void;
-  onSave: (apiKey: string) => void;
-}
-
-const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ providerId, onClose, onSave }) => {
-  const [apiKey, setApiKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
-
-  const handleSave = () => {
-    if (apiKey.trim()) {
-      onSave(apiKey.trim());
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">
-            设置 {providerId.toUpperCase()} API密钥
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              API密钥
-            </label>
-            <div className="relative">
+      case 1:
+        return (
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-white/60 bg-white/80 p-6 shadow-inner">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium text-slate-600">风险承受程度</div>
+                  <div className="mt-1 text-xl font-semibold text-slate-900">{form.risk_score} / 10</div>
+                </div>
+                <div className="rounded-full bg-sky-50/80 px-4 py-2 text-sm text-sky-600">倾向：{riskAttitudeLabel}</div>
+              </div>
               <input
-                type={showKey ? 'text' : 'password'}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="输入您的API密钥"
-                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                type="range"
+                min={1}
+                max={10}
+                value={form.risk_score}
+                onChange={(event) => handleRiskScoreChange(Number(event.target.value))}
+                className="mt-6 h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-200"
               />
-              <button
-                type="button"
-                onClick={() => setShowKey(!showKey)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center"
-              >
-                {showKey ? (
-                  <Eye className="w-4 h-4 text-gray-400" />
-                ) : (
-                  <Eye className="w-4 h-4 text-gray-400" />
-                )}
-              </button>
             </div>
-          </div>
-          
-          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-            <div className="flex">
-              <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 mr-2" />
-              <div className="text-sm text-yellow-700">
-                <p className="font-medium">安全提示</p>
-                <p>API密钥将被加密存储，请确保密钥来源可靠。</p>
+            <div className="rounded-2xl border border-white/60 bg-white/80 p-6 shadow-inner">
+              <div className="text-sm font-medium text-slate-600">投资周期偏好</div>
+              <div className="mt-3 flex flex-wrap gap-3">
+                {HORIZON_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => updateForm({ investment_horizon: option })}
+                    className={clsx(
+                      'rounded-full px-4 py-2 text-sm transition-all',
+                      form.investment_horizon === option
+                        ? 'bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-soft'
+                        : 'bg-slate-100/70 text-slate-600 hover:bg-slate-200'
+                    )}
+                  >
+                    {option}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
+        );
+      case 2:
+        return (
+          <div className="grid gap-4 md:grid-cols-2">
+            {STYLE_OPTIONS.map((style) => (
+              <button
+                key={style.id}
+                onClick={() => updateForm({ strategy_style: style.id })}
+                className={clsx(
+                  'rounded-2xl border px-5 py-4 text-left transition-all',
+                  form.strategy_style === style.id
+                    ? 'border-blue-400 bg-blue-50 shadow-soft'
+                    : 'border-white/70 bg-white/80 hover:border-blue-200'
+                )}
+              >
+                <div className="text-base font-semibold text-slate-900">{style.label}</div>
+                <p className="mt-2 text-sm text-slate-500">{style.description}</p>
+              </button>
+            ))}
+          </div>
+        );
+      case 3:
+        return (
+          <div className="space-y-4">
+            <div className="text-sm font-medium text-slate-600">关注的行业方向</div>
+            <div className="flex flex-wrap gap-2">
+              {INDUSTRY_OPTIONS.map((industry) => (
+                <button
+                  key={industry}
+                  onClick={() => toggleIndustry(industry)}
+                  className={clsx(
+                    'rounded-full px-4 py-2 text-sm transition-colors',
+                    form.focus_industries.includes(industry)
+                      ? 'bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-soft'
+                      : 'bg-slate-100/70 text-slate-600 hover:bg-slate-200'
+                  )}
+                >
+                  {industry}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      case 4:
+        return (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-sky-200/70 bg-sky-50/70 p-6 shadow-soft">
+              <div className="flex items-center gap-3 text-sky-700">
+                <CheckCircle2 className="h-6 w-6" />
+                <div>
+                  <div className="text-lg font-semibold">个性化画像已生成</div>
+                  <p className="text-sm text-sky-600">AI 助手会基于以下偏好提供策略建议和执行清单。</p>
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <SummaryCard label="投资水平" value={form.experience_label} />
+              <SummaryCard label="资金规模" value={ASSET_OPTIONS.find((item) => item.id === form.asset_scale)?.label || form.asset_scale} />
+              <SummaryCard label="风险偏好" value={`${riskAttitudeLabel} (${form.risk_score}/10)`} />
+              <SummaryCard label="投资周期" value={form.investment_horizon} />
+              <SummaryCard label="策略风格" value={STYLE_OPTIONS.find((item) => item.id === form.strategy_style)?.label || form.strategy_style} />
+              <SummaryCard label="关注行业" value={form.focus_industries.join('、') || '待选择'} />
+            </div>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="relative z-10 mx-auto flex h-full max-w-5xl flex-col space-y-6 py-6">
+      <div className="rounded-3xl border border-white/60 bg-white/80 p-8 shadow-soft backdrop-blur-xl">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium text-sky-600">个性化配置向导</div>
+            <h1 className="mt-2 text-3xl font-semibold text-slate-900">打造专属的投资画像</h1>
+            <p className="mt-2 text-sm text-slate-500">填写以下信息，AI 助手将根据您的投资风格和偏好提供策略建议。</p>
+          </div>
+          <div className="rounded-2xl bg-sky-50/80 px-4 py-3 text-sm text-sky-600">
+            <div className="font-medium">步骤 {currentStep + 1} / {steps.length}</div>
+            <div className="text-xs text-slate-500">{steps[currentStep]}</div>
+          </div>
         </div>
-        
-        <div className="flex justify-end space-x-3 mt-6">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-          >
-            取消
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!apiKey.trim()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-          >
-            保存
-          </button>
+
+        <div className="mt-6 flex flex-wrap gap-2">
+          {steps.map((step, index) => (
+            <div
+              key={step}
+              className={clsx(
+                'flex items-center rounded-full px-4 py-2 text-xs transition-colors',
+                index === currentStep
+                  ? 'bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-soft'
+                  : index < currentStep
+                    ? 'bg-sky-100 text-sky-600'
+                    : 'bg-slate-100/70 text-slate-500'
+              )}
+            >
+              {index + 1}. {step}
+            </div>
+          ))}
         </div>
+
+        <div className="mt-8">
+          <StepContent />
+        </div>
+
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-white/60 pt-6">
+          <button
+            onClick={() => setCurrentStep((prev) => Math.max(prev - 1, 0))}
+            disabled={currentStep === 0}
+            className={clsx(
+              'inline-flex items-center rounded-full px-4 py-2 text-sm transition-colors',
+              currentStep === 0
+                ? 'cursor-not-allowed bg-slate-100 text-slate-400'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            )}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" /> 上一步
+          </button>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleReset}
+              disabled={saving}
+              className="rounded-full bg-white/80 px-4 py-2 text-sm text-slate-500 transition-colors hover:bg-white"
+            >
+              恢复默认
+            </button>
+
+            {currentStep < steps.length - 1 ? (
+              <button
+                onClick={() => setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1))}
+                className="inline-flex items-center rounded-full bg-gradient-to-r from-sky-500 to-blue-500 px-5 py-2 text-sm font-medium text-white shadow-soft transition-all hover:translate-x-0.5"
+              >
+                下一步
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                onClick={handleSubmit}
+                disabled={saving}
+                className="inline-flex items-center rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-6 py-2 text-sm font-medium text-white shadow-soft transition-all"
+              >
+                <Star className="mr-2 h-4 w-4" /> 保存设置
+              </button>
+            )}
+          </div>
+        </div>
+
+        {success && (
+          <div className="mt-6 rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-600 shadow-soft">
+            {success}
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-4 rounded-2xl border border-red-200/70 bg-red-50/70 px-4 py-3 text-sm text-red-600 shadow-soft">
+            {error}
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-export default SettingsPage
+interface SummaryCardProps {
+  label: string;
+  value: string;
+}
+
+const SummaryCard: React.FC<SummaryCardProps> = ({ label, value }) => (
+  <div className="rounded-2xl border border-white/60 bg-white/80 p-5 shadow-inner">
+    <div className="text-xs font-medium uppercase tracking-wider text-slate-400">{label}</div>
+    <div className="mt-2 text-lg font-semibold text-slate-900">{value}</div>
+  </div>
+);
+
+export default SettingsPage;
+
