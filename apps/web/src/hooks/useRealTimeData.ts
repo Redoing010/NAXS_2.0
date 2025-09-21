@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useWebSocket } from './useWebSocket';
 import apiService from '../services/api';
+import { WEBSOCKET_URL } from '../config/environment';
 
 // 数据类型定义
 interface MarketData {
@@ -74,7 +75,7 @@ export const useRealTimeData = (config: UseRealTimeDataConfig): UseRealTimeDataR
 
   // WebSocket连接
   const { isConnected, sendMessage } = useWebSocket({
-    url: 'ws://localhost:8765',
+    url: WEBSOCKET_URL,
     enabled: enabled && useWS,
     onOpen: () => {
       setConnectionStatus('connected');

@@ -44,6 +44,7 @@ import { useWebSocket } from '../../hooks/useWebSocket';
 import { useRealTimeData } from '../../hooks/useRealTimeData';
 import { useAgentStatus } from '../../hooks/useAgentStatus';
 import { useSystemMetrics } from '../../hooks/useSystemMetrics';
+import { WEBSOCKET_URL } from '../../config/environment';
 
 // 数据类型定义
 interface MarketData {
@@ -688,7 +689,7 @@ export const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({ className 
   
   // WebSocket连接状态
   const { isConnected, connectionStatus } = useWebSocket({
-    url: 'ws://localhost:8765',
+    url: WEBSOCKET_URL,
     onMessage: (data) => {
       // 处理实时数据更新
       console.log('WebSocket data:', data);
