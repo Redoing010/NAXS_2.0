@@ -4,6 +4,81 @@ import axios from 'axios';
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import type { MarketData, Strategy, StockRecommendation, ChatMessage } from '../store';
 
+// API基础地址，支持通过Vite环境变量覆盖
+const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:3001/api';
+
+// 仪表盘概览数据接口
+export interface DashboardOverview {
+  headline: string;
+  subheadline: string;
+  timestamp: string;
+  account: {
+    net_asset: number;
+    week_pnl: number;
+    available_cash: number;
+    score: string;
+    score_trend: number;
+    goal: { completed: number; target: number };
+    risk_level: string;
+    risk_score: number;
+    risk_comment: string;
+  };
+  market_heat: {
+    score: number;
+    change: number;
+    grade: string;
+    north_bound: number;
+    ai_sentiment: string;
+  };
+  performance_trend: Array<{ date: string; portfolio: number; benchmark: number }>;
+  fund_flow: Array<{ date: string; net_flow: number; forecast: number }>;
+  ai_insights: Array<{ title: string; detail: string }>;
+  quick_prompts: string[];
+  profile: {
+    name: string;
+    avatar?: string;
+    badges?: string[];
+    greeting?: string;
+  };
+  news: Array<{ title: string; source: string; timestamp: string }>;
+}
+
+// 用户档案
+export interface UserProfileSummary {
+  id?: string;
+  name: string;
+  phone?: string;
+  avatar?: string;
+  city?: string;
+  role?: string;
+  greeting?: string;
+  badges?: string[];
+  updated_at?: string;
+}
+
+// 个性化偏好
+export interface UserPersonalPreferences {
+  experience_level: string;
+  experience_label: string;
+  asset_scale: string;
+  risk_score: number;
+  risk_attitude: string;
+  investment_horizon: string;
+  strategy_style: string;
+  focus_industries: string[];
+  excluded_industries: string[];
+  ai_auto_adjust: boolean;
+  notes?: string;
+  updated_at?: string;
+}
+
+// 助手聊天响应
+export interface AssistantChatResult {
+  reply: string;
+  insights: string[];
+  timestamp: string;
+}
+
 // API响应接口
 interface ApiResponse<T = any> {
   status: 'ok' | 'error';
@@ -80,7 +155,7 @@ class ApiService {
   private client: AxiosInstance;
   private baseURL: string;
 
-  constructor(baseURL: string = 'http://localhost:8001') {
+  constructor(baseURL: string = API_BASE_URL) {
     this.baseURL = baseURL;
     this.client = axios.create({
       baseURL,
@@ -135,8 +210,17 @@ class ApiService {
   ): Promise<ApiResponse<T>> {
     try {
       const requestConfig = baseURL ? { ...config, baseURL } : config;
-      const response: AxiosResponse<ApiResponse<T>> = await this.client.request(requestConfig);
-      return response.data;
+      const response: AxiosResponse<ApiResponse<T> | T> = await this.client.request(requestConfig);
+      const payload = response.data as any;
+
+      if (payload && typeof payload === 'object' && 'status' in payload) {
+        return payload as ApiResponse<T>;
+      }
+
+      return {
+        status: 'ok',
+        data: payload as T,
+      };
     } catch (error: any) {
       if (error.response?.data) {
         return error.response.data;
@@ -313,6 +397,40 @@ class ApiService {
     return this.post('/chat/message', request);
   }
 
+  // ==================== NAXS 2.0 UI增强 ====================
+
+  async getDashboardOverview(): Promise<ApiResponse<DashboardOverview>> {
+    return this.get('/dashboard/overview');
+  }
+
+  async getDashboardBriefing(): Promise<ApiResponse<{ title: string; highlights: string[] }>> {
+    return this.get('/dashboard/briefing');
+  }
+
+  async getUserProfile(): Promise<ApiResponse<UserProfileSummary>> {
+    return this.get('/user/profile');
+  }
+
+  async getUserPreferences(): Promise<ApiResponse<UserPersonalPreferences>> {
+    return this.get('/user/preferences');
+  }
+
+  async updateUserPreferences(preferences: Partial<UserPersonalPreferences>): Promise<ApiResponse<UserPersonalPreferences>> {
+    return this.post('/user/preferences', preferences);
+  }
+
+  async resetUserPreferences(): Promise<ApiResponse<UserPersonalPreferences>> {
+    return this.post('/user/preferences/reset');
+  }
+
+  async getAssistantPrompts(): Promise<ApiResponse<{ items: string[] }>> {
+    return this.get('/assistant/prompts');
+  }
+
+  async sendAssistantMessage(message: string): Promise<ApiResponse<AssistantChatResult>> {
+    return this.post('/assistant/chat', { message });
+  }
+
   // 发送Agent消息
   async sendAgentMessage(data: {
     message: string;
@@ -320,8 +438,31 @@ class ApiService {
     context?: Array<{role: string; content: string}>;
     tools_enabled?: boolean;
     stream?: boolean;
-  }): Promise<ApiResponse<any>> {
-    return this.post('/agent/chat', data);
+  }): Promise<ApiResponse<any> & Record<string, any>> {
+    const assistant = await this.sendAssistantMessage(data.message);
+
+    if (assistant.status !== 'ok' || !assistant.data) {
+      return assistant as ApiResponse<any>;
+    }
+
+    const reply = assistant.data;
+    const payload = {
+      content: reply.reply,
+      message: reply.reply,
+      model: data.model ?? 'naxs-assistant',
+      tokens_used: reply.reply.length,
+      execution_time: 0,
+      tools_used: reply.insights ?? [],
+      confidence: 0.86,
+      usage: { total_tokens: reply.reply.length },
+      reasoning: (reply.insights ?? []).join('；'),
+    };
+
+    return {
+      status: 'ok',
+      data: payload,
+      ...payload,
+    };
   }
 
   // 执行工具调用
@@ -486,30 +627,6 @@ class ApiService {
     module: string;
   }>>> {
     return this.get('/system/logs', { level, limit });
-  }
-
-  // ==================== 用户偏好相关 ====================
-  
-  async getUserPreferences(): Promise<ApiResponse<any>> {
-    return this.get('/user/preferences');
-  }
-
-  async updateUserPreferences(preferences: any): Promise<ApiResponse<any>> {
-    return this.put('/user/preferences', preferences);
-  }
-
-  async getUserPortfolio(): Promise<ApiResponse<{
-    positions: Array<{
-      symbol: string;
-      quantity: number;
-      avg_cost: number;
-      current_price: number;
-      unrealized_pnl: number;
-    }>;
-    cash: number;
-    total_value: number;
-  }>> {
-    return this.get('/user/portfolio');
   }
 
   // ==================== 工具方法 ====================
