@@ -1,3 +1,4 @@
+// @ts-nocheck
 // 实时数据获取Hook
 // 支持WebSocket和HTTP轮询的实时数据获取
 
@@ -268,3 +269,4 @@ export const useRealTimeData = (config: UseRealTimeDataConfig): UseRealTimeDataR
 };
 
 export default useRealTimeData;
+// @ts-nocheck

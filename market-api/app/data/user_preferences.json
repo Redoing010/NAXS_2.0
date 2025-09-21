@@ -1,0 +1,22 @@
+{
+  "experience_level": "experienced",
+  "experience_label": "有一定经验",
+  "asset_scale": "100k-1m",
+  "risk_score": 5,
+  "risk_attitude": "平衡",
+  "investment_horizon": "中期 (1-3年)",
+  "strategy_style": "balanced",
+  "focus_industries": [
+    "新能源",
+    "半导体",
+    "人工智能",
+    "消费升级"
+  ],
+  "excluded_industries": [
+    "煤炭",
+    "钢铁"
+  ],
+  "ai_auto_adjust": true,
+  "notes": "偏好可控回撤的稳健成长组合，关注科技与高端制造机会。",
+  "updated_at": "2025-02-18T08:30:00+08:00"
+}

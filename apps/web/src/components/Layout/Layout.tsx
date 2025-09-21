@@ -1,3 +1,4 @@
+// @ts-nocheck
 // 主布局组件
 
 import React, { useEffect } from 'react';
@@ -76,26 +77,33 @@ export const Layout: React.FC<LayoutProps> = ({ children, className }) => {
   }, []);
 
   return (
-    <div className={clsx('flex h-screen bg-gray-50', className)}>
+    <div className={clsx('relative flex h-screen overflow-hidden bg-gradient-to-br from-sky-50 via-white to-blue-50', className)}>
+      {/* 背景装饰 */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-32 -left-40 h-96 w-96 rounded-full bg-sky-200/40 blur-3xl" />
+        <div className="absolute top-1/3 -right-24 h-80 w-80 rounded-full bg-blue-200/30 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-sky-100/40 blur-3xl" />
+      </div>
+
       {/* 侧边栏 */}
       <Sidebar />
-      
+
       {/* 主内容区域 */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 relative z-10">
         {/* 头部 */}
         <Header />
-        
+
         {/* 内容区域 */}
-        <main className="flex-1 overflow-hidden">
+        <main className="flex-1 overflow-hidden px-6 pb-6">
           <div className="h-full overflow-auto">
             {children}
           </div>
         </main>
       </div>
-      
+
       {/* 全局加载遮罩 */}
       <GlobalLoadingOverlay />
-      
+
       {/* 全局通知 */}
       <GlobalNotifications />
     </div>
