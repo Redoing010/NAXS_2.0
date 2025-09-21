@@ -30,16 +30,16 @@ interface NavItem {
 // 导航项配置
 const navItems: NavItem[] = [
   {
-    id: 'dashboard',
-    label: '仪表板',
-    icon: Home,
-    view: 'dashboard',
-  },
-  {
     id: 'chat',
     label: 'AI助手',
     icon: MessageSquare,
     view: 'chat',
+  },
+  {
+    id: 'dashboard',
+    label: '仪表板',
+    icon: Home,
+    view: 'dashboard',
   },
   {
     id: 'strategies',
