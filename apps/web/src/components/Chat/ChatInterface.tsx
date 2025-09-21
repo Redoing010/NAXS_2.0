@@ -32,6 +32,9 @@ interface ChatInterfaceProps {
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   const { messages, isLoading, currentModel, availableModels } = useChat();
   const { addMessage, updateMessage, clearMessages, setLoading, setCurrentModel } = useChatActions();
+  const currentModelOption = availableModels.find(
+    (model) => model.model === currentModel || model.id === currentModel
+  );
   
   const [inputValue, setInputValue] = useState('');
   const [showSettings, setShowSettings] = useState(false);
@@ -70,6 +73,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
       const response = await apiService.sendAgentMessage({
         message: content,
         model: currentModel,
+        provider: currentModelOption?.provider,
         context: (messages || []).slice(-10).map(m => ({
           role: m.type === 'user' ? 'user' : 'assistant',
           content: m.content
@@ -86,11 +90,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
           timestamp: new Date(),
           metadata: {
             model: response.data.model,
+            provider: response.data.provider,
             tokens: response.data.tokens_used,
             execution_time: response.data.execution_time,
             tools_used: response.data.tools_used || [],
-            agent_actions: response.data.agent_actions || [],
-            reasoning: response.data.reasoning,
             confidence: response.data.confidence,
           },
         };
@@ -123,6 +126,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   };
 
   // 处理工具调用结果
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleToolResults = (toolsUsed: string[], toolResults: any[]) => {
     // 根据工具类型显示不同的结果
     toolsUsed.forEach((tool, index) => {
@@ -247,7 +251,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
           </div>
           <div>
             <h2 className="text-lg font-semibold text-gray-900">AI投研助手</h2>
-            <p className="text-sm text-gray-500">模型: {currentModel}</p>
+            <p className="text-sm text-gray-500">
+              模型: {currentModelOption?.name || currentModel}
+            </p>
           </div>
         </div>
         
@@ -280,8 +286,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
               className="select text-sm"
             >
               {(availableModels || []).map((model) => (
-                <option key={model} value={model}>
-                  {model}
+                <option key={model.id} value={model.model}>
+                  {model.name}（{model.provider}）
                 </option>
               ))}
             </select>
@@ -434,6 +440,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
 // 消息气泡组件
 interface MessageBubbleProps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   message: any;
   onCopy: (content: string) => void;
   onRegenerate: () => void;
@@ -492,7 +499,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           ) : (
             <ReactMarkdown
               components={{
-                code({ node, inline, className, children, ...props }) {
+                code({ inline, className, children, ...props }) {
                   const match = /language-(\w+)/.exec(className || '');
                   return !inline && match ? (
                     <SyntaxHighlighter
@@ -523,14 +530,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           isUser && 'justify-end'
         )}>
           <span>{format(new Date(message.timestamp), 'HH:mm', { locale: zhCN })}</span>
+          {message.metadata?.provider && (
+            <span>• {message.metadata.provider}</span>
+          )}
           {message.metadata?.model && (
             <span>• {message.metadata.model}</span>
           )}
-          {message.metadata?.tokens && (
+          {typeof message.metadata?.tokens === 'number' && (
             <span>• {message.metadata.tokens} tokens</span>
           )}
-          {message.metadata?.execution_time && (
-            <span>• {message.metadata.execution_time.toFixed(2)}s</span>
+          {typeof message.metadata?.execution_time === 'number' && (
+            <span>• {Math.round(message.metadata.execution_time)}ms</span>
           )}
         </div>
 
