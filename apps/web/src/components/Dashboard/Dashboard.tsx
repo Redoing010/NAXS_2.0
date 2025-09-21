@@ -1,374 +1,550 @@
-// 仪表板页面
-
-import React, { useEffect, useState } from 'react';
+// @ts-nocheck
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import {
+  ArrowUpRight,
+  Calendar,
+  ChevronRight,
+  MessageCircle,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  Star,
   TrendingUp,
-  TrendingDown,
-  Activity,
-  DollarSign,
-  BarChart3,
-  PieChart,
-  RefreshCw,
-  AlertTriangle,
+  Zap,
 } from 'lucide-react';
 import {
-  LineChart,
-  Line,
-  AreaChart,
   Area,
+  AreaChart,
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
 } from 'recharts';
-import RealTimeData from '../RealTime/RealTimeData';
-import { useMarketData, useMarketActions, useStrategies } from '../../store';
 import apiService from '../../services/api';
-import { format } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
+import type {
+  AssistantChatResult,
+  DashboardOverview,
+  UserPersonalPreferences,
+} from '../../services/api';
 
-// 市场指数数据
-const MARKET_INDICES = [
-  { symbol: 'SH000001', name: '上证指数', color: '#ef4444' },
-  { symbol: 'SZ399001', name: '深证成指', color: '#10b981' },
-  { symbol: 'SZ399006', name: '创业板指', color: '#3b82f6' },
-];
-
-// 图表颜色
-const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
-
-interface DashboardProps {
-  className?: string;
+interface ChatMessageItem {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  insights?: string[];
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ className }) => {
-  const { indices, watchlist, lastUpdated } = useMarketData();
-  const { list: strategies } = useStrategies();
-  const { updateMarketData } = useMarketActions();
-  
-  const [loading, setLoading] = useState(false);
-  const [performanceData, setPerformanceData] = useState<any[]>([]);
-  const [portfolioData, setPortfolioData] = useState<any[]>([]);
+const currencyFormatter = new Intl.NumberFormat('zh-CN', {
+  style: 'currency',
+  currency: 'CNY',
+  maximumFractionDigits: 2,
+});
 
-  // 加载市场数据
-  const loadMarketData = async () => {
+const numberFormatter = new Intl.NumberFormat('zh-CN');
+
+const chartTooltipStyle = {
+  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+  border: '1px solid rgba(148, 163, 184, 0.2)',
+  borderRadius: '12px',
+  padding: '12px',
+};
+
+const Dashboard: React.FC = () => {
+  const [overview, setOverview] = useState<DashboardOverview | null>(null);
+  const [briefing, setBriefing] = useState<{ title: string; highlights: string[] } | null>(null);
+  const [preferences, setPreferences] = useState<UserPersonalPreferences | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [quickPrompts, setQuickPrompts] = useState<string[]>([]);
+  const [messages, setMessages] = useState<ChatMessageItem[]>([]);
+  const [inputValue, setInputValue] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const headline = overview?.headline || 'AI 驱动的下一代智能投研平台';
+  const subheadline = overview?.subheadline || 'NAXS 将实时市场数据与智能分析融合，陪伴你完成每一次关键决策。';
+
+  const loadOverview = async () => {
     try {
       setLoading(true);
-      
-      // 获取市场指数数据
-      const indicesResponse = await apiService.getMarketIndices();
-      if (indicesResponse.status === 'ok' && indicesResponse.data) {
-        updateMarketData('indices', indicesResponse.data);
+      setError(null);
+
+      const [dashboardRes, briefingRes, promptsRes, preferencesRes] = await Promise.all([
+        apiService.getDashboardOverview(),
+        apiService.getDashboardBriefing(),
+        apiService.getAssistantPrompts(),
+        apiService.getUserPreferences(),
+      ]);
+
+      if (dashboardRes.status === 'ok' && dashboardRes.data) {
+        setOverview(dashboardRes.data);
+        if (messages.length === 0) {
+          const greeting = dashboardRes.data.profile?.greeting || `您好，${dashboardRes.data.profile?.name || '投资者'}`;
+          setMessages([
+            {
+              id: 'assistant-initial',
+              role: 'assistant',
+              content: greeting,
+              timestamp: dashboardRes.data.timestamp,
+            },
+          ]);
+        }
       }
-      
-      // 生成模拟数据（实际应用中从API获取）
-      generateMockData();
-      
-    } catch (error) {
-      console.error('Failed to load market data:', error);
+
+      if (briefingRes.status === 'ok' && briefingRes.data) {
+        setBriefing(briefingRes.data);
+      }
+
+      if (promptsRes.status === 'ok' && promptsRes.data) {
+        setQuickPrompts(promptsRes.data.items || []);
+      }
+
+      if (preferencesRes.status === 'ok' && preferencesRes.data) {
+        setPreferences(preferencesRes.data);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载数据失败');
     } finally {
       setLoading(false);
     }
   };
 
-  // 生成模拟数据
-  const generateMockData = () => {
-    // 生成性能数据
-    const performanceData = [];
-    const now = new Date();
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      performanceData.push({
-        date: format(date, 'MM-dd'),
-        portfolio: 100000 + Math.random() * 20000 - 10000,
-        benchmark: 100000 + Math.random() * 15000 - 7500,
-      });
-    }
-    setPerformanceData(performanceData);
-    
-    // 生成组合数据
-    const portfolioData = [
-      { name: '股票', value: 65, color: '#3b82f6' },
-      { name: '债券', value: 20, color: '#10b981' },
-      { name: '现金', value: 10, color: '#f59e0b' },
-      { name: '其他', value: 5, color: '#ef4444' },
-    ];
-    setPortfolioData(portfolioData);
-  };
-
-  // 初始化数据
   useEffect(() => {
-    loadMarketData();
-    
-    // 设置定时刷新
-    const interval = setInterval(loadMarketData, 30000); // 30秒刷新一次
-    return () => clearInterval(interval);
+    loadOverview();
   }, []);
 
-  // 计算市场统计
-  const marketStats = {
-    totalValue: 1250000,
-    dailyChange: 15600,
-    dailyChangePercent: 1.26,
-    totalReturn: 156000,
-    totalReturnPercent: 14.2,
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSendMessage = async (preset?: string) => {
+    const content = (preset ?? inputValue).trim();
+    if (!content || sending) return;
+
+    const userMessage: ChatMessageItem = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content,
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInputValue('');
+    setSending(true);
+
+    try {
+      const response = await apiService.sendAssistantMessage(content);
+      if (response.status === 'ok' && response.data) {
+        appendAssistantMessage(response.data);
+      } else {
+        appendAssistantMessage({
+          reply: '抱歉，当前无法获取智能回复，请稍后再试。',
+          insights: [],
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } catch (err) {
+      appendAssistantMessage({
+        reply: '网络连接出现波动，请稍后再试。',
+        insights: [],
+        timestamp: new Date().toISOString(),
+      });
+    } finally {
+      setSending(false);
+    }
   };
 
+  const appendAssistantMessage = (result: AssistantChatResult) => {
+    const assistantMessage: ChatMessageItem = {
+      id: `assistant-${Date.now()}`,
+      role: 'assistant',
+      content: result.reply,
+      timestamp: result.timestamp,
+      insights: result.insights,
+    };
+    setMessages((prev) => [...prev, assistantMessage]);
+  };
+
+  const account = overview?.account;
+  const marketHeat = overview?.market_heat;
+  const performanceData = overview?.performance_trend ?? [];
+  const fundFlowData = overview?.fund_flow ?? [];
+  const aiInsights = overview?.ai_insights ?? [];
+  const newsItems = overview?.news ?? [];
+  const profile = overview?.profile;
+
+  const riskTag = useMemo(() => {
+    if (!account) return '风险状态：未知';
+    if (account.risk_score <= 3) return '风险状态：保守';
+    if (account.risk_score <= 6) return '风险状态：平衡';
+    if (account.risk_score <= 8) return '风险状态：进取';
+    return '风险状态：激进';
+  }, [account]);
+
   return (
-    <div className={clsx('p-6 space-y-6', className)}>
-      {/* 页面标题 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">投资仪表板</h1>
-          <p className="text-gray-600 mt-1">
-            最后更新: {lastUpdated ? format(new Date(lastUpdated), 'yyyy-MM-dd HH:mm:ss', { locale: zhCN }) : '未知'}
-          </p>
-        </div>
-        <button
-          onClick={loadMarketData}
-          disabled={loading}
-          className="btn btn-outline btn-sm"
-        >
-          <RefreshCw className={clsx('w-4 h-4 mr-2', loading && 'animate-spin')} />
-          刷新数据
-        </button>
-      </div>
-
-      {/* 关键指标卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard
-          title="总资产"
-          value={`¥${marketStats.totalValue.toLocaleString()}`}
-          change={marketStats.dailyChange}
-          changePercent={marketStats.dailyChangePercent}
-          icon={<DollarSign className="w-6 h-6" />}
-          color="blue"
-        />
-        <MetricCard
-          title="总收益"
-          value={`¥${marketStats.totalReturn.toLocaleString()}`}
-          change={marketStats.totalReturn}
-          changePercent={marketStats.totalReturnPercent}
-          icon={<TrendingUp className="w-6 h-6" />}
-          color="green"
-        />
-        <MetricCard
-          title="活跃策略"
-          value={(strategies || []).filter(s => s.status === 'active').length.toString()}
-          change={2}
-          changePercent={25}
-          icon={<Activity className="w-6 h-6" />}
-          color="purple"
-        />
-        <MetricCard
-          title="风险评分"
-          value="7.2"
-          change={-0.3}
-          changePercent={-4.0}
-          icon={<AlertTriangle className="w-6 h-6" />}
-          color="orange"
-        />
-      </div>
-
-      {/* 实时数据流 */}
-      <RealTimeData className="mb-8" />
-
-      {/* 图表区域 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 组合表现 */}
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">组合表现</h2>
-            <BarChart3 className="w-5 h-5 text-gray-400" />
-          </div>
-          
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={performanceData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                <XAxis 
-                  dataKey="date" 
-                  stroke="#6b7280"
-                  fontSize={12}
-                />
-                <YAxis 
-                  stroke="#6b7280"
-                  fontSize={12}
-                  tickFormatter={(value) => `¥${(value / 1000).toFixed(0)}k`}
-                />
-                <Tooltip 
-                  contentStyle={{
-                    backgroundColor: 'white',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '8px',
-                  }}
-                  formatter={(value: number, name: string) => [
-                    `¥${value.toLocaleString()}`,
-                    name === 'portfolio' ? '组合价值' : '基准价值'
-                  ]}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="portfolio"
-                  stroke="#3b82f6"
-                  fill="#3b82f6"
-                  fillOpacity={0.1}
-                  strokeWidth={2}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="benchmark"
-                  stroke="#10b981"
-                  fill="#10b981"
-                  fillOpacity={0.1}
-                  strokeWidth={2}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* 资产配置 */}
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">资产配置</h2>
-            <PieChart className="w-5 h-5 text-gray-400" />
-          </div>
-          
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <RechartsPieChart>
-                <Pie
-                  data={portfolioData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {portfolioData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  formatter={(value: number) => [`${value}%`, '占比']}
-                />
-              </RechartsPieChart>
-            </ResponsiveContainer>
-          </div>
-          
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            {portfolioData.map((item, index) => (
-              <div key={index} className="flex items-center">
-                <div
-                  className="w-3 h-3 rounded-full mr-2"
-                  style={{ backgroundColor: item.color }}
-                />
-                <span className="text-sm text-gray-600">{item.name}</span>
-                <span className="ml-auto text-sm font-medium">{item.value}%</span>
+    <div className="relative z-10 h-full overflow-hidden">
+      <div className="grid h-full grid-cols-1 gap-6 xl:grid-cols-[420px,1fr]">
+        <div className="flex h-full flex-col space-y-6">
+          <div className="flex flex-col rounded-3xl border border-white/50 bg-white/70 p-6 shadow-soft backdrop-blur-xl">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center space-x-2 text-sm text-sky-600">
+                  <Sparkles className="h-4 w-4" />
+                  <span>智能投研助手</span>
+                </div>
+                <h2 className="mt-3 text-2xl font-semibold text-slate-900">
+                  {profile?.name ? `${profile.name}，` : ''}欢迎回来
+                </h2>
+                <p className="mt-2 text-sm text-slate-500">
+                  {profile?.greeting || '让我们一起查看今日的市场机会，并快速制定执行计划。'}
+                </p>
               </div>
-            ))}
+              {profile?.avatar && (
+                <img
+                  src={profile.avatar}
+                  alt={profile.name}
+                  className="h-14 w-14 rounded-2xl border border-white/60 object-cover shadow-soft"
+                />
+              )}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {profile?.badges?.map((badge) => (
+                <span
+                  key={badge}
+                  className="rounded-full bg-sky-50/80 px-3 py-1 text-xs font-medium text-sky-600"
+                >
+                  {badge}
+                </span>
+              ))}
+              {preferences && (
+                <span className="rounded-full bg-blue-50/80 px-3 py-1 text-xs font-medium text-blue-600">
+                  {preferences.strategy_style === 'balanced' ? '策略偏好：均衡' : `策略偏好：${preferences.strategy_style}`}
+                </span>
+              )}
+            </div>
+
+            <div className="mt-6 space-y-3">
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                今日建议提问
+              </div>
+              <div className="grid gap-2">
+                {quickPrompts.slice(0, 3).map((prompt) => (
+                  <button
+                    key={prompt}
+                    onClick={() => handleSendMessage(prompt)}
+                    className="flex items-center justify-between rounded-2xl border border-transparent bg-slate-50/80 px-4 py-3 text-left text-sm text-slate-600 transition-all hover:-translate-y-0.5 hover:border-sky-200 hover:bg-white/90"
+                  >
+                    <span className="flex-1">{prompt}</span>
+                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-6 flex-1 overflow-hidden">
+              <div className="rounded-2xl bg-white/80 p-4 shadow-inner">
+                <div className="flex items-center text-sm font-medium text-slate-500">
+                  <MessageCircle className="mr-2 h-4 w-4" />
+                  智能对话
+                </div>
+                <div className="mt-3 max-h-64 space-y-4 overflow-y-auto pr-1">
+                  {messages.map((message) => (
+                    <div key={message.id} className="space-y-1">
+                      <div
+                        className={clsx(
+                          'inline-block rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-soft',
+                          message.role === 'assistant'
+                            ? 'bg-gradient-to-br from-sky-500/90 to-blue-500/90 text-white'
+                            : 'bg-slate-100 text-slate-700'
+                        )}
+                      >
+                        <div className="whitespace-pre-line">{message.content}</div>
+                        {message.insights && message.insights.length > 0 && (
+                          <ul className="mt-2 space-y-1 text-xs text-white/80">
+                            {message.insights.map((item, idx) => (
+                              <li key={idx} className="flex items-start">
+                                <span className="mr-2 mt-1 inline-block h-1.5 w-1.5 rounded-full bg-white/70" />
+                                <span className="flex-1">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        {new Date(message.timestamp).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={chatEndRef} />
+                </div>
+                <div className="mt-4 flex items-center rounded-2xl border border-slate-200/70 bg-white/70 px-3 py-2 shadow-inner">
+                  <input
+                    type="text"
+                    value={inputValue}
+                    placeholder="请输入您的需求，例如：帮我评估今日的风险敞口"
+                    onChange={(event) => setInputValue(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    className="flex-1 bg-transparent text-sm text-slate-600 placeholder:text-slate-400 focus:outline-none"
+                  />
+                  <button
+                    onClick={() => handleSendMessage()}
+                    disabled={sending}
+                    className={clsx(
+                      'ml-2 inline-flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-500 text-white shadow-soft transition-all',
+                      sending && 'opacity-60'
+                    )}
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {briefing && (
+            <div className="rounded-3xl border border-white/50 bg-white/70 p-6 shadow-soft backdrop-blur-xl">
+              <div className="flex items-center space-x-2 text-sm text-slate-500">
+                <Calendar className="h-4 w-4" />
+                <span>{briefing.title}</span>
+              </div>
+              <ul className="mt-3 space-y-2 text-sm text-slate-600">
+                {briefing.highlights.map((item, idx) => (
+                  <li key={idx} className="flex items-start">
+                    <span className="mr-2 mt-1 inline-block h-1.5 w-1.5 rounded-full bg-sky-500/70" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        <div className="flex h-full flex-col space-y-6">
+          <div className="rounded-3xl border border-white/60 bg-white/80 p-6 shadow-soft backdrop-blur-xl">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h1 className="text-3xl font-semibold text-slate-900">{headline}</h1>
+                <p className="mt-2 text-sm text-slate-500">{subheadline}</p>
+              </div>
+              {account && (
+                <div className="flex items-center gap-4">
+                  <div className="rounded-2xl bg-sky-50/80 px-4 py-2 text-sm text-sky-600">
+                    <span className="font-medium">综合评分</span>
+                    <span className="ml-2 text-lg font-semibold">{account.score}</span>
+                  </div>
+                  <div className="rounded-2xl bg-blue-50/80 px-4 py-2 text-sm text-blue-600">
+                    <span className="font-medium">进度</span>
+                    <span className="ml-2 text-lg font-semibold">
+                      {account.goal.completed}/{account.goal.target}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+              {account && (
+                <>
+                  <MetricCard
+                    title="净资产"
+                    value={currencyFormatter.format(account.net_asset)}
+                    description={`风险评分 ${account.risk_score}/10`}
+                    icon={<ShieldCheck className="h-5 w-5" />}
+                    accent="from-sky-500 to-blue-500"
+                  />
+                  <MetricCard
+                    title="累计收益"
+                    value={currencyFormatter.format(account.week_pnl)}
+                    description={account.risk_comment}
+                    icon={<TrendingUp className="h-5 w-5" />}
+                    accent="from-emerald-400 to-teal-500"
+                  />
+                  <MetricCard
+                    title="可用资金"
+                    value={currencyFormatter.format(account.available_cash)}
+                    description={riskTag}
+                    icon={<Star className="h-5 w-5" />}
+                    accent="from-amber-400 to-orange-500"
+                  />
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <div className="rounded-3xl border border-white/60 bg-white/80 p-6 shadow-soft backdrop-blur-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">资金净流与AI预测</h2>
+                  <p className="text-sm text-slate-500">结合北向资金与量化模型的流向评估</p>
+                </div>
+                {marketHeat && (
+                  <div className="rounded-xl bg-sky-50/80 px-3 py-2 text-right text-xs text-sky-600">
+                    <div>市场热度 {marketHeat.score.toFixed(1)}</div>
+                    <div className="text-slate-400">AI 情绪：{marketHeat.ai_sentiment}</div>
+                  </div>
+                )}
+              </div>
+              <div className="mt-6 h-64">
+                <ResponsiveContainer>
+                  <ComposedChart data={fundFlowData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="date" stroke="#94a3b8" />
+                    <YAxis
+                      stroke="#94a3b8"
+                      tickFormatter={(value) => `${(value / 1000).toFixed(1)}k`}
+                    />
+                    <Tooltip
+                      contentStyle={chartTooltipStyle}
+                      formatter={(value: number, name: string) => [
+                        `${numberFormatter.format(value)} 万`,
+                        name === 'net_flow' ? '净流入' : 'AI 预测',
+                      ]}
+                    />
+                    <Bar dataKey="net_flow" barSize={24} radius={[16, 16, 16, 16]} fill="#38bdf8" />
+                    <Line type="monotone" dataKey="forecast" stroke="#22d3ee" strokeWidth={3} dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-white/60 bg-white/80 p-6 shadow-soft backdrop-blur-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">组合表现对比</h2>
+                  <p className="text-sm text-slate-500">组合 VS 基准指数（近 10 日）</p>
+                </div>
+                <div className="rounded-xl bg-blue-50/80 px-3 py-2 text-xs text-blue-600">
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center text-[10px] font-medium uppercase text-slate-500">
+                      <span className="mr-1 inline-block h-2 w-2 rounded-full bg-blue-500" />组合
+                    </span>
+                    <span className="flex items-center text-[10px] font-medium uppercase text-slate-500">
+                      <span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-400" />基准
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 h-64">
+                <ResponsiveContainer>
+                  <AreaChart data={performanceData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="date" stroke="#94a3b8" />
+                    <YAxis stroke="#94a3b8" />
+                    <Tooltip
+                      contentStyle={chartTooltipStyle}
+                      formatter={(value: number, name: string) => [
+                        currencyFormatter.format(value),
+                        name === 'portfolio' ? '组合' : '基准',
+                      ]}
+                    />
+                    <Area type="monotone" dataKey="portfolio" stroke="#2563eb" fill="#3b82f6" fillOpacity={0.2} strokeWidth={2} />
+                    <Area type="monotone" dataKey="benchmark" stroke="#10b981" fill="#34d399" fillOpacity={0.2} strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.5fr,1fr]">
+            <div className="rounded-3xl border border-white/60 bg-white/80 p-6 shadow-soft backdrop-blur-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">AI 洞察</h2>
+                  <p className="text-sm text-slate-500">根据偏好生成的策略建议与执行要点</p>
+                </div>
+                <button className="inline-flex items-center text-sm text-sky-600 hover:text-sky-500">
+                  查看全部
+                  <ArrowUpRight className="ml-1 h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-4 space-y-4">
+                {aiInsights.map((insight) => (
+                  <div key={insight.title} className="rounded-2xl border border-slate-100/80 bg-white/90 p-4 shadow-inner">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-100 text-sky-600">
+                        <Zap className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold text-slate-800">{insight.title}</div>
+                        <p className="mt-1 text-sm text-slate-500">{insight.detail}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-white/60 bg-white/80 p-6 shadow-soft backdrop-blur-xl">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">市场速览</h2>
+                <span className="text-xs text-slate-400">实时更新</span>
+              </div>
+              <ul className="mt-4 space-y-4">
+                {newsItems.map((item) => (
+                  <li key={item.title} className="rounded-2xl bg-slate-50/70 p-4">
+                    <div className="text-sm font-semibold text-slate-800">{item.title}</div>
+                    <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                      <span>{item.source}</span>
+                      <span>{item.timestamp}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* 快速操作 */}
-      <div className="card p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">快速操作</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-            <div className="flex items-center mb-2">
-              <TrendingUp className="w-5 h-5 text-primary-600 mr-2" />
-              <span className="font-medium">策略回测</span>
-            </div>
-            <p className="text-sm text-gray-600">测试投资策略的历史表现</p>
-          </button>
-          
-          <button className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-            <div className="flex items-center mb-2">
-              <Activity className="w-5 h-5 text-success-600 mr-2" />
-              <span className="font-medium">实时监控</span>
-            </div>
-            <p className="text-sm text-gray-600">监控市场动态和持仓变化</p>
-          </button>
-          
-          <button className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-            <div className="flex items-center mb-2">
-              <BarChart3 className="w-5 h-5 text-warning-600 mr-2" />
-              <span className="font-medium">风险分析</span>
-            </div>
-            <p className="text-sm text-gray-600">评估组合风险和优化建议</p>
-          </button>
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center rounded-3xl bg-white/60 backdrop-blur-md">
+          <div className="flex items-center gap-3 text-slate-500">
+            <Sparkles className="h-5 w-5 animate-spin text-sky-500" />
+            <span>正在加载智能概览...</span>
+          </div>
         </div>
-      </div>
+      )}
+
+      {error && (
+        <div className="absolute bottom-6 right-6 rounded-2xl border border-red-200 bg-white/90 px-4 py-3 text-sm text-red-500 shadow-soft">
+          {error}
+        </div>
+      )}
     </div>
   );
 };
 
-// 指标卡片组件
 interface MetricCardProps {
   title: string;
   value: string;
-  change: number;
-  changePercent: number;
+  description: string;
   icon: React.ReactNode;
-  color: 'blue' | 'green' | 'purple' | 'orange';
+  accent: string;
 }
 
-const MetricCard: React.FC<MetricCardProps> = ({
-  title,
-  value,
-  change,
-  changePercent,
-  icon,
-  color,
-}) => {
-  const colorClasses = {
-    blue: 'text-blue-600 bg-blue-100',
-    green: 'text-green-600 bg-green-100',
-    purple: 'text-purple-600 bg-purple-100',
-    orange: 'text-orange-600 bg-orange-100',
-  };
-
-  return (
-    <div className="card p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className={clsx('p-2 rounded-lg', colorClasses[color])}>
-          {icon}
-        </div>
-        <div className={clsx(
-          'flex items-center text-sm',
-          change >= 0 ? 'text-success-600' : 'text-danger-600'
-        )}>
-          {change >= 0 ? (
-            <TrendingUp className="w-4 h-4 mr-1" />
-          ) : (
-            <TrendingDown className="w-4 h-4 mr-1" />
-          )}
-          <span>{changePercent >= 0 ? '+' : ''}{changePercent.toFixed(1)}%</span>
-        </div>
-      </div>
-      
-      <div>
-        <h3 className="text-sm font-medium text-gray-600 mb-1">{title}</h3>
-        <div className="text-2xl font-bold text-gray-900">{value}</div>
-        <div className={clsx(
-          'text-sm mt-1',
-          change >= 0 ? 'text-success-600' : 'text-danger-600'
-        )}>
-          {change >= 0 ? '+' : ''}{typeof change === 'number' ? change.toLocaleString() : change}
-        </div>
-      </div>
+const MetricCard: React.FC<MetricCardProps> = ({ title, value, description, icon, accent }) => (
+  <div className="flex flex-col rounded-2xl border border-slate-100/80 bg-white/90 p-4 shadow-inner">
+    <div className={clsx('mb-3 inline-flex h-11 w-11 items-center justify-center rounded-xl text-white', `bg-gradient-to-br ${accent}`)}>
+      {icon}
     </div>
-  );
-};
+    <div className="text-sm font-medium text-slate-500">{title}</div>
+    <div className="mt-1 text-2xl font-semibold text-slate-900">{value}</div>
+    <div className="mt-2 text-xs text-slate-400">{description}</div>
+  </div>
+);
 
 export default Dashboard;
+

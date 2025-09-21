@@ -1,0 +1,15 @@
+{
+  "id": "investor-001",
+  "name": "张三",
+  "phone": "186****8899",
+  "avatar": "https://api.dicebear.com/7.x/miniavs/svg?seed=naxs",
+  "city": "上海",
+  "role": "资深智能投研顾问",
+  "greeting": "早上好，张三！AI投研助手已经为您准备好了今日的市场洞察。",
+  "badges": [
+    "稳健型投资者",
+    "风险偏好：平衡",
+    "年度目标收益：12%"
+  ],
+  "updated_at": "2025-02-18T08:30:00+08:00"
+}

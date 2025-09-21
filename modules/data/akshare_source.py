@@ -1,6 +1,9 @@
 # AkShare数据源实现
 
-import akshare as ak
+try:
+    import akshare as ak
+except ImportError:  # pragma: no cover - optional dependency
+    ak = None  # type: ignore
 import pandas as pd
 from typing import List, Union
 from datetime import datetime, date
@@ -24,7 +27,7 @@ class AkshareSource(IDataSource):
                         end_date: Union[str, date, datetime],
                         adjust: str = "qfq") -> pd.DataFrame:
         """获取日频OHLCV数据
-        
+
         Args:
             symbol: 标准股票代码，如 "000001.SZ"
             start_date: 开始日期
@@ -35,6 +38,9 @@ class AkshareSource(IDataSource):
             DataFrame with columns: [open, high, low, close, volume, amount]
             Index: DatetimeIndex (UTC timezone)
         """
+        if ak is None:
+            raise RuntimeError("akshare dependency is required for AkshareSource")
+
         try:
             # 转换为AkShare格式的代码
             ak_symbol = normalize_symbol(symbol, target="akshare")

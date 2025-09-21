@@ -24,7 +24,17 @@ from .middleware import (
     memory_guard
 )
 from .alerting import init_alerting, cleanup_alerting, alert_manager
-from .routers import health, spot, minute, placeholders, bars, admin, system
+from .routers import (
+    health,
+    spot,
+    minute,
+    placeholders,
+    bars,
+    admin,
+    system,
+    ui,
+    assistant,
+)
 
 # 配置日志
 logging.basicConfig(
@@ -123,6 +133,8 @@ app.include_router(minute.router, tags=["分钟数据"])
 app.include_router(bars.router, tags=["K线数据"])
 app.include_router(placeholders.router, tags=["占位符"])
 app.include_router(admin.router, tags=["管理接口"])
+app.include_router(ui.router, tags=["UI数据"])
+app.include_router(assistant.router, tags=["助手"])
 
 @app.get("/", summary="API根路径")
 async def root():

@@ -1,6 +1,9 @@
 # 交易日历模块
 
-import akshare as ak
+try:
+    import akshare as ak
+except ImportError:  # pragma: no cover - optional dependency
+    ak = None  # type: ignore
 import pandas as pd
 from typing import List, Set, Union
 from datetime import datetime, date, timedelta
@@ -42,6 +45,10 @@ class TradingCalendar:
             # 从AkShare获取
             trading_dates = []
             
+            if ak is None:
+                logger.warning("akshare not installed, using fallback calendar")
+                return self._generate_fallback_calendar(start_year, end_year)
+
             for year in range(start_year, end_year + 1):
                 try:
                     year_dates = ak.tool_trade_date_hist_sina()
