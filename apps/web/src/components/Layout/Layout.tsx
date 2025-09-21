@@ -136,7 +136,11 @@ const GlobalLoadingOverlay: React.FC = () => {
 
 // 全局通知组件
 const GlobalNotifications: React.FC = () => {
-  const { notifications } = useUI();
+  const { notifications: uiNotifications } = useUI();
+  const notifications = React.useMemo(
+    () => (Array.isArray(uiNotifications) ? uiNotifications : []),
+    [uiNotifications]
+  );
   const [visibleNotifications, setVisibleNotifications] = React.useState<string[]>([]);
 
   // 显示最新的通知

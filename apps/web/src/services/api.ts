@@ -3,6 +3,7 @@
 import axios from 'axios';
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import type { MarketData, Strategy, StockRecommendation, ChatMessage } from '../store';
+import { API_BASE_URL } from '../config/environment';
 
 // API响应接口
 interface ApiResponse<T = any> {
@@ -80,7 +81,7 @@ class ApiService {
   private client: AxiosInstance;
   private baseURL: string;
 
-  constructor(baseURL: string = 'http://localhost:8001') {
+  constructor(baseURL: string = API_BASE_URL) {
     this.baseURL = baseURL;
     this.client = axios.create({
       baseURL,
