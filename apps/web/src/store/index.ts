@@ -25,7 +25,71 @@ export interface ChatMessage {
     model?: string;
     tools_used?: string[];
     execution_time?: number;
+    cost?: number;
+    confidence?: number;
+    provider?: string;
   };
+}
+
+// 大模型选项
+export interface LLMModelOption {
+  id: string;
+  name: string;
+  provider: string;
+  model: string;
+  context: string;
+  description?: string;
+  capabilities?: string[];
+  streaming?: boolean;
+  status?: 'online' | 'degraded' | 'offline';
+}
+
+// 知识图谱实体
+export interface KnowledgeGraphEntity {
+  id: string;
+  name: string;
+  type?: string;
+  description?: string;
+  attributes?: Record<string, any>;
+  score?: number;
+}
+
+// 知识图谱关系
+export interface KnowledgeGraphRelation {
+  id: string;
+  source: string;
+  target: string;
+  type: string;
+  weight?: number;
+  metadata?: Record<string, any>;
+}
+
+// 知识图谱查询历史
+export interface KnowledgeGraphQueryHistory {
+  id: string;
+  query: string;
+  relation?: string;
+  timestamp: string;
+  results: number;
+}
+
+// 知识图谱上下文
+export interface KnowledgeGraphContextPayload {
+  enabled: boolean;
+  focus?: string;
+  entities?: KnowledgeGraphEntity[];
+  relations?: KnowledgeGraphRelation[];
+}
+
+// 知识图谱状态
+export interface KnowledgeGraphState {
+  enabled: boolean;
+  loading: boolean;
+  error?: string | null;
+  searchResults: KnowledgeGraphEntity[];
+  selectedEntity?: KnowledgeGraphEntity;
+  relations: KnowledgeGraphRelation[];
+  history: KnowledgeGraphQueryHistory[];
 }
 
 // 策略信息接口
@@ -119,7 +183,8 @@ interface AppState {
     messages: ChatMessage[];
     isLoading: boolean;
     currentModel: string;
-    availableModels: string[];
+    currentProvider: string;
+    availableModels: LLMModelOption[];
   };
   
   // 策略状态
@@ -142,6 +207,9 @@ interface AppState {
   
   // WebSocket连接
   websocket: WebSocketState;
+
+  // 知识图谱状态
+  knowledgeGraph: KnowledgeGraphState;
   
   // UI状态
   ui: {
@@ -176,6 +244,7 @@ interface AppActions {
   clearMessages: () => void;
   setLoading: (loading: boolean) => void;
   setCurrentModel: (model: string) => void;
+  setAvailableModels: (models: LLMModelOption[]) => void;
   
   // 策略操作
   updateStrategies: (strategies: Strategy[]) => void;
@@ -199,6 +268,16 @@ interface AppActions {
   addNotification: (notification: Omit<AppState['ui']['notifications'][0], 'id' | 'timestamp' | 'read'>) => void;
   markNotificationRead: (id: string) => void;
   clearNotifications: () => void;
+
+  // 知识图谱操作
+  setKnowledgeGraphEnabled: (enabled: boolean) => void;
+  setKnowledgeGraphLoading: (loading: boolean) => void;
+  setKnowledgeGraphError: (error?: string | null) => void;
+  setKnowledgeGraphResults: (results: KnowledgeGraphEntity[]) => void;
+  setKnowledgeGraphSelectedEntity: (entity?: KnowledgeGraphEntity) => void;
+  setKnowledgeGraphRelations: (relations: KnowledgeGraphRelation[]) => void;
+  addKnowledgeGraphHistory: (entry: KnowledgeGraphQueryHistory) => void;
+  clearKnowledgeGraph: () => void;
 }
 
 // 默认用户偏好
@@ -235,8 +314,54 @@ export const useAppStore = create<AppState & AppActions>()(
         chat: {
           messages: [],
           isLoading: false,
-          currentModel: 'gpt-4',
-          availableModels: ['gpt-4', 'gpt-3.5-turbo', 'claude-3', 'gemini-pro'],
+          currentModel: 'gpt-4-turbo',
+          currentProvider: 'openai',
+          availableModels: [
+            {
+              id: 'openai:gpt-4-turbo',
+              name: 'GPT-4 Turbo',
+              provider: 'openai',
+              model: 'gpt-4-turbo',
+              context: '128K',
+              description: 'OpenAI GPT-4 Turbo 模型',
+              capabilities: ['general', 'analysis', 'reasoning'],
+              streaming: true,
+              status: 'online',
+            },
+            {
+              id: 'qwen:qwen2.5-14b',
+              name: 'Qwen2.5 14B',
+              provider: 'qwen',
+              model: 'qwen2.5-14b-instruct',
+              context: '128K',
+              description: '通义千问2.5 14B 指令微调模型（推荐）',
+              capabilities: ['analysis', 'report', 'chinese'],
+              streaming: true,
+              status: 'online',
+            },
+            {
+              id: 'qwen:qwen2.5-32b',
+              name: 'Qwen2.5 32B',
+              provider: 'qwen',
+              model: 'qwen2.5-32b-instruct',
+              context: '256K',
+              description: '通义千问2.5 32B 长上下文版本',
+              capabilities: ['long-context', 'reasoning'],
+              streaming: true,
+              status: 'online',
+            },
+            {
+              id: 'anthropic:claude-3-sonnet',
+              name: 'Claude 3 Sonnet',
+              provider: 'anthropic',
+              model: 'claude-3-sonnet',
+              context: '200K',
+              description: 'Anthropic Claude 3 Sonnet',
+              capabilities: ['analysis', 'coding', 'english'],
+              streaming: true,
+              status: 'degraded',
+            },
+          ],
         },
         
         strategies: {
@@ -264,6 +389,15 @@ export const useAppStore = create<AppState & AppActions>()(
           currentView: 'dashboard' as const,
           theme: 'light' as const,
           notifications: [],
+        },
+
+        knowledgeGraph: {
+          enabled: false,
+          loading: false,
+          error: null,
+          searchResults: [],
+          relations: [],
+          history: [],
         },
         
         // 用户操作
@@ -383,8 +517,26 @@ export const useAppStore = create<AppState & AppActions>()(
             chat: {
               ...state.chat,
               currentModel: model,
+              currentProvider:
+                state.chat.availableModels.find((item) => item.model === model || item.id === model)?.provider ||
+                state.chat.currentProvider,
             },
           }));
+        },
+
+        setAvailableModels: (models: LLMModelOption[]) => {
+          set((state: AppState) => {
+            const fallback = models[0];
+            const matched = models.find((model) => model.model === state.chat.currentModel || model.id === state.chat.currentModel);
+            return {
+              chat: {
+                ...state.chat,
+                availableModels: models,
+                currentModel: matched?.model ?? fallback?.model ?? state.chat.currentModel,
+                currentProvider: matched?.provider ?? fallback?.provider ?? state.chat.currentProvider,
+              },
+            };
+          });
         },
         
         // 策略操作
@@ -540,6 +692,81 @@ export const useAppStore = create<AppState & AppActions>()(
             },
           }));
         },
+
+        setKnowledgeGraphEnabled: (enabled: boolean) => {
+          set((state: AppState) => ({
+            knowledgeGraph: {
+              ...state.knowledgeGraph,
+              enabled,
+            },
+          }));
+        },
+
+        setKnowledgeGraphLoading: (loading: boolean) => {
+          set((state: AppState) => ({
+            knowledgeGraph: {
+              ...state.knowledgeGraph,
+              loading,
+            },
+          }));
+        },
+
+        setKnowledgeGraphError: (error?: string | null) => {
+          set((state: AppState) => ({
+            knowledgeGraph: {
+              ...state.knowledgeGraph,
+              error: error ?? null,
+            },
+          }));
+        },
+
+        setKnowledgeGraphResults: (results: KnowledgeGraphEntity[]) => {
+          set((state: AppState) => ({
+            knowledgeGraph: {
+              ...state.knowledgeGraph,
+              searchResults: results,
+            },
+          }));
+        },
+
+        setKnowledgeGraphSelectedEntity: (entity?: KnowledgeGraphEntity) => {
+          set((state: AppState) => ({
+            knowledgeGraph: {
+              ...state.knowledgeGraph,
+              selectedEntity: entity,
+            },
+          }));
+        },
+
+        setKnowledgeGraphRelations: (relations: KnowledgeGraphRelation[]) => {
+          set((state: AppState) => ({
+            knowledgeGraph: {
+              ...state.knowledgeGraph,
+              relations,
+            },
+          }));
+        },
+
+        addKnowledgeGraphHistory: (entry: KnowledgeGraphQueryHistory) => {
+          set((state: AppState) => ({
+            knowledgeGraph: {
+              ...state.knowledgeGraph,
+              history: [entry, ...state.knowledgeGraph.history].slice(0, 50),
+            },
+          }));
+        },
+
+        clearKnowledgeGraph: () => {
+          set((state: AppState) => ({
+            knowledgeGraph: {
+              ...state.knowledgeGraph,
+              searchResults: [],
+              relations: [],
+              selectedEntity: undefined,
+              error: null,
+            },
+          }));
+        },
       }),
       {
         name: 'naxs-app-store',
@@ -565,6 +792,7 @@ export const useAppStore = create<AppState & AppActions>()(
 export const useUser = () => useAppStore((state) => state.user);
 export const useMarketData = () => useAppStore((state) => state.marketData);
 export const useChat = () => useAppStore((state) => state.chat);
+export const useKnowledgeGraph = () => useAppStore((state) => state.knowledgeGraph);
 export const useStrategies = () => useAppStore((state) => state.strategies);
 export const useRecommendations = () => useAppStore((state) => state.recommendations);
 export const useWebSocket = () => useAppStore((state) => state.websocket);
@@ -588,6 +816,7 @@ export const useChatActions = () => useAppStore((state) => ({
   clearMessages: state.clearMessages,
   setLoading: state.setLoading,
   setCurrentModel: state.setCurrentModel,
+  setAvailableModels: state.setAvailableModels,
 }));
 
 export const useStrategyActions = () => useAppStore((state) => ({
@@ -615,4 +844,15 @@ export const useUIActions = () => useAppStore((state) => ({
   addNotification: state.addNotification,
   markNotificationRead: state.markNotificationRead,
   clearNotifications: state.clearNotifications,
+}));
+
+export const useKnowledgeGraphActions = () => useAppStore((state) => ({
+  setKnowledgeGraphEnabled: state.setKnowledgeGraphEnabled,
+  setKnowledgeGraphLoading: state.setKnowledgeGraphLoading,
+  setKnowledgeGraphError: state.setKnowledgeGraphError,
+  setKnowledgeGraphResults: state.setKnowledgeGraphResults,
+  setKnowledgeGraphSelectedEntity: state.setKnowledgeGraphSelectedEntity,
+  setKnowledgeGraphRelations: state.setKnowledgeGraphRelations,
+  addKnowledgeGraphHistory: state.addKnowledgeGraphHistory,
+  clearKnowledgeGraph: state.clearKnowledgeGraph,
 }));

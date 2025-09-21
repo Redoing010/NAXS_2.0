@@ -317,8 +317,15 @@ class ApiService {
   async sendAgentMessage(data: {
     message: string;
     model?: string;
-    context?: Array<{role: string; content: string}>;
+    provider?: string;
+    context?: Array<{ role: string; content: string }>;
     tools_enabled?: boolean;
+    knowledge_graph?: {
+      enabled: boolean;
+      focus?: string;
+      entities?: any[];
+      relations?: any[];
+    };
     stream?: boolean;
   }): Promise<ApiResponse<any>> {
     return this.post('/agent/chat', data);
@@ -351,7 +358,7 @@ class ApiService {
   }
 
   // 获取可用模型
-  async getAvailableModels(): Promise<ApiResponse<string[]>> {
+  async getAvailableModels(): Promise<ApiResponse<any>> {
     return this.get('/models/available');
   }
 
