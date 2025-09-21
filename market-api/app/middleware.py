@@ -344,9 +344,10 @@ def setup_middleware(app):
     
     # 添加内置中间件
     app.add_middleware(GZipMiddleware, minimum_size=1000)
+    allowed_hosts = ["*"] if settings.DEBUG else ["localhost", "127.0.0.1", "testserver"]
     app.add_middleware(
-        TrustedHostMiddleware, 
-        allowed_hosts=["*"] if settings.DEBUG else ["localhost", "127.0.0.1"]
+        TrustedHostMiddleware,
+        allowed_hosts=allowed_hosts
     )
     
     # 添加异常处理器

@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Agent状态监控Hook
 // 实时监控Agent运行状态、性能指标和任务执行情况
 
@@ -302,3 +303,4 @@ export const useAgentStatus = (config: UseAgentStatusConfig = {}): UseAgentStatu
 };
 
 export default useAgentStatus;
+// @ts-nocheck

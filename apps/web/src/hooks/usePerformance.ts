@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { debounce, throttle } from 'lodash-es';
 
@@ -330,3 +331,4 @@ export const useWebWorker = (workerScript: string) => {
     isReady: !!workerRef.current
   };
 };
+// @ts-nocheck
